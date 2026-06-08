@@ -118,7 +118,10 @@ export default function StudentDashboard() {
                     <Text style={styles.sectionTitle}>Quick Actions</Text>
 
                     <View style={styles.actionList}>
-                        <TouchableOpacity style={styles.actionCard}>
+                        <TouchableOpacity
+                            style={styles.actionCard}
+                            onPress={() => router.push('/timetable')}
+                        >
                             <Text style={styles.actionTitle}>View Timetable</Text>
                             <Text style={styles.actionText}>Check today, tomorrow, and weekly classes.</Text>
                         </TouchableOpacity>
