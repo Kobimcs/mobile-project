@@ -66,7 +66,10 @@ export default function RepPanel() {
                             </Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionCard}>
+                        <TouchableOpacity
+                            style={styles.actionCard}
+                            onPress={() => router.push('/manage-timetable')}
+                        >
                             <Text style={styles.actionTitle}>Manage Timetable</Text>
                             <Text style={styles.actionText}>
                                 Add or update class times, course titles, lecturers, and venues.

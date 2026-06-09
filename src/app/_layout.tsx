@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 export default function RootLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="manage-timetable" />
       <Stack.Screen name="timetable" />
       <Stack.Screen name="assignments" />
       <Stack.Screen name="add-assignment" />
