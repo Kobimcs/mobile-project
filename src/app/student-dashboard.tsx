@@ -141,6 +141,16 @@ export default function StudentDashboard() {
                             <Text style={styles.actionTitle}>Assignments</Text>
                             <Text style={styles.actionText}>Track deadlines and completed work.</Text>
                         </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionCard}
+                            onPress={() => router.push('/profile-settings' as any)}
+                        >
+                            <Text style={styles.actionTitle}>Profile & Settings</Text>
+                            <Text style={styles.actionText}>
+                                Manage reminders, sync, subscription, and account settings.
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>

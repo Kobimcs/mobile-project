@@ -10,10 +10,12 @@ export default function RootLayout() {
 
       {/* Student screens */}
       <Stack.Screen name="student-dashboard" />
+      <Stack.Screen name="profile-settings" />
       <Stack.Screen name="timetable" />
       <Stack.Screen name="announcements" />
       <Stack.Screen name="assignments" />
       <Stack.Screen name="exam-venue-search" />
+
 
       {/* Course rep screens */}
       <Stack.Screen name="rep-panel" />

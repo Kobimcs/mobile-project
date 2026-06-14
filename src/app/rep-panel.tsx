@@ -95,6 +95,16 @@ export default function RepPanel() {
                                 Add exam venues so students can search and prepare early.
                             </Text>
                         </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionCard}
+                            onPress={() => router.push('/profile-settings' as any)}
+                        >
+                            <Text style={styles.actionTitle}>Profile & Settings</Text>
+                            <Text style={styles.actionText}>
+                                Manage reminders, sync, subscription, and account settings.
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
