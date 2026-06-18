@@ -1,5 +1,6 @@
 import { AppColors } from '@/constants/colors';
 import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
     ScrollView,
     StyleSheet,
@@ -9,18 +10,69 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type AnnouncementCategory =
+    | 'General'
+    | 'Class Update'
+    | 'Venue Change'
+    | 'Assignment'
+    | 'Exam';
+
 type Announcement = {
     id: number;
     title: string;
     message: string;
-    category: 'General' | 'Class Update' | 'Venue Change' | 'Assignment' | 'Exam';
+    category: AnnouncementCategory;
+    targetClassGroup: string;
     postedBy: string;
     postedAt: string;
+    isRead: boolean;
 };
 
-const announcements: Announcement[] = [];
+type FilterCategory = 'All' | AnnouncementCategory;
+
+// Backend data will be loaded into this list later.
+// Keep this empty for now so the app does not show fake announcement records.
+const initialAnnouncements: Announcement[] = [];
+
+const filterCategories: FilterCategory[] = [
+    'All',
+    'General',
+    'Class Update',
+    'Venue Change',
+    'Assignment',
+    'Exam',
+];
 
 export default function AnnouncementsScreen() {
+    const [activeFilter, setActiveFilter] = useState<FilterCategory>('All');
+    const [announcements, setAnnouncements] =
+        useState<Announcement[]>(initialAnnouncements);
+
+    const unreadCount = useMemo(
+        () => announcements.filter((announcement) => !announcement.isRead).length,
+        [announcements]
+    );
+
+    const filteredAnnouncements = useMemo(() => {
+        if (activeFilter === 'All') {
+            return announcements;
+        }
+
+        return announcements.filter(
+            (announcement) => announcement.category === activeFilter
+        );
+    }, [activeFilter, announcements]);
+
+    function handleMarkAsRead(announcementId: number) {
+        setAnnouncements((currentAnnouncements) =>
+            currentAnnouncements.map((announcement) =>
+                announcement.id === announcementId
+                    ? { ...announcement, isRead: true }
+                    : announcement
+            )
+        );
+    }
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView
@@ -39,24 +91,106 @@ export default function AnnouncementsScreen() {
                     </Text>
                 </View>
 
-                {announcements.length === 0 ? (
+                <View style={styles.summaryCard}>
+                    <View style={styles.summaryItem}>
+                        <Text style={styles.summaryNumber}>{announcements.length}</Text>
+                        <Text style={styles.summaryLabel}>Total</Text>
+                    </View>
+
+                    <View style={styles.summaryDivider} />
+
+                    <View style={styles.summaryItem}>
+                        <Text style={styles.summaryNumber}>{unreadCount}</Text>
+                        <Text style={styles.summaryLabel}>Unread</Text>
+                    </View>
+                </View>
+
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filterContent}
+                    style={styles.filterScroll}
+                >
+                    {filterCategories.map((category) => (
+                        <TouchableOpacity
+                            key={category}
+                            style={[
+                                styles.filterChip,
+                                activeFilter === category && styles.activeFilterChip,
+                            ]}
+                            onPress={() => setActiveFilter(category)}
+                        >
+                            <Text
+                                style={[
+                                    styles.filterText,
+                                    activeFilter === category && styles.activeFilterText,
+                                ]}
+                            >
+                                {category}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {filteredAnnouncements.length === 0 ? (
                     <View style={styles.emptyCard}>
-                        <Text style={styles.emptyTitle}>No announcements yet</Text>
+                        <Text style={styles.emptyTitle}>
+                            {activeFilter === 'All'
+                                ? 'No announcements yet'
+                                : `No ${activeFilter.toLowerCase()} announcements`}
+                        </Text>
                         <Text style={styles.emptyText}>
-                            Announcements posted by course reps will appear here. This keeps
-                            students updated without depending only on WhatsApp messages.
+                            Announcements posted by course reps will appear here with
+                            categories, class group targeting, and read status.
                         </Text>
                     </View>
                 ) : (
-                    announcements.map((announcement) => (
-                        <View key={announcement.id} style={styles.announcementCard}>
-                            <Text style={styles.category}>{announcement.category}</Text>
-                            <Text style={styles.announcementTitle}>{announcement.title}</Text>
+                    filteredAnnouncements.map((announcement) => (
+                        <View
+                            key={announcement.id}
+                            style={[
+                                styles.announcementCard,
+                                !announcement.isRead && styles.unreadCard,
+                            ]}
+                        >
+                            <View style={styles.cardHeader}>
+                                <Text style={styles.category}>{announcement.category}</Text>
+
+                                {!announcement.isRead && (
+                                    <View style={styles.unreadBadge}>
+                                        <Text style={styles.unreadBadgeText}>Unread</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            <Text style={styles.announcementTitle}>
+                                {announcement.title}
+                            </Text>
                             <Text style={styles.message}>{announcement.message}</Text>
 
+                            <View style={styles.targetBox}>
+                                <Text style={styles.targetLabel}>Target group</Text>
+                                <Text style={styles.targetText}>
+                                    {announcement.targetClassGroup}
+                                </Text>
+                            </View>
+
+                            {!announcement.isRead && (
+                                <TouchableOpacity
+                                    style={styles.readButton}
+                                    onPress={() => handleMarkAsRead(announcement.id)}
+                                >
+                                    <Text style={styles.readButtonText}>Mark as Read</Text>
+                                </TouchableOpacity>
+                            )}
+
                             <View style={styles.footer}>
-                                <Text style={styles.footerText}>{announcement.postedBy}</Text>
-                                <Text style={styles.footerText}>{announcement.postedAt}</Text>
+                                <Text style={styles.footerText}>
+                                    {announcement.postedBy}
+                                </Text>
+                                <Text style={styles.footerText}>
+                                    {announcement.postedAt}
+                                </Text>
                             </View>
                         </View>
                     ))
@@ -80,7 +214,7 @@ const styles = StyleSheet.create({
         paddingBottom: 36,
     },
     header: {
-        marginBottom: 22,
+        marginBottom: 18,
     },
     backText: {
         color: AppColors.primary,
@@ -98,6 +232,63 @@ const styles = StyleSheet.create({
         color: AppColors.mutedText,
         marginTop: 6,
         lineHeight: 20,
+    },
+    summaryCard: {
+        backgroundColor: AppColors.card,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: AppColors.border,
+        padding: 18,
+        marginBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    summaryItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    summaryNumber: {
+        fontSize: 26,
+        fontWeight: '900',
+        color: AppColors.primary,
+    },
+    summaryLabel: {
+        marginTop: 4,
+        fontSize: 13,
+        fontWeight: '700',
+        color: AppColors.mutedText,
+    },
+    summaryDivider: {
+        width: 1,
+        height: 42,
+        backgroundColor: AppColors.border,
+    },
+    filterScroll: {
+        marginBottom: 16,
+    },
+    filterContent: {
+        gap: 10,
+        paddingRight: 4,
+    },
+    filterChip: {
+        backgroundColor: AppColors.card,
+        borderWidth: 1,
+        borderColor: AppColors.border,
+        borderRadius: 999,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+    },
+    activeFilterChip: {
+        backgroundColor: AppColors.primary,
+        borderColor: AppColors.primary,
+    },
+    filterText: {
+        color: AppColors.mutedText,
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    activeFilterText: {
+        color: AppColors.card,
     },
     emptyCard: {
         backgroundColor: AppColors.card,
@@ -125,6 +316,16 @@ const styles = StyleSheet.create({
         borderColor: AppColors.border,
         marginBottom: 14,
     },
+    unreadCard: {
+        borderColor: AppColors.primary,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+        gap: 10,
+    },
     category: {
         alignSelf: 'flex-start',
         backgroundColor: AppColors.background,
@@ -134,7 +335,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 5,
         borderRadius: 14,
-        marginBottom: 10,
+        overflow: 'hidden',
+    },
+    unreadBadge: {
+        backgroundColor: AppColors.primary,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 999,
+    },
+    unreadBadgeText: {
+        color: AppColors.card,
+        fontSize: 11,
+        fontWeight: '900',
+        textTransform: 'uppercase',
     },
     announcementTitle: {
         fontSize: 18,
@@ -147,6 +360,38 @@ const styles = StyleSheet.create({
         color: AppColors.mutedText,
         lineHeight: 21,
     },
+    targetBox: {
+        backgroundColor: AppColors.background,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: AppColors.border,
+        padding: 12,
+        marginTop: 14,
+    },
+    targetLabel: {
+        fontSize: 12,
+        color: AppColors.mutedText,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    targetText: {
+        fontSize: 14,
+        color: AppColors.text,
+        fontWeight: '800',
+    },
+    readButton: {
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: AppColors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 12,
+    },
+    readButtonText: {
+        color: AppColors.card,
+        fontSize: 15,
+        fontWeight: '800',
+    },
     footer: {
         marginTop: 14,
         paddingTop: 12,
@@ -154,6 +399,7 @@ const styles = StyleSheet.create({
         borderTopColor: AppColors.border,
         flexDirection: 'row',
         justifyContent: 'space-between',
+        gap: 10,
     },
     footerText: {
         fontSize: 12,
