@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type ExamVenueStatus = 'pending' | 'confirmed';
+
 type ExamVenueRecord = {
     id: number;
     courseCode: string;
@@ -19,20 +21,28 @@ type ExamVenueRecord = {
     examDate: string;
     examTime: string;
     venue: string;
+    buildingOrBlock: string;
+    roomOrHall?: string;
     startIndex: number;
     endIndex: number;
-    note: string;
-    status: 'Pending' | 'Confirmed';
+    status: ExamVenueStatus;
 };
 
+// Backend data will be loaded into this list later.
+// Keep this empty for now so the app does not show fake exam venue records.
 const examVenueRecords: ExamVenueRecord[] = [];
+
+function formatStatusLabel(status: ExamVenueStatus) {
+    if (status === 'confirmed') return 'Confirmed';
+    return 'Pending';
+}
 
 export default function ExamVenueSearchScreen() {
     const [searchNumber, setSearchNumber] = useState('');
-    const [matchedVenue, setMatchedVenue] = useState<ExamVenueRecord | null>(null);
+    const [matchedVenues, setMatchedVenues] = useState<ExamVenueRecord[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
 
-    const handleSearchVenue = () => {
+    function handleSearchVenue() {
         const cleanedNumber = searchNumber.trim();
 
         if (!cleanedNumber) {
@@ -53,20 +63,20 @@ export default function ExamVenueSearchScreen() {
             return;
         }
 
-        const foundVenue = examVenueRecords.find(
+        const foundVenues = examVenueRecords.filter(
             (record) =>
                 numericValue >= record.startIndex && numericValue <= record.endIndex
         );
 
-        setMatchedVenue(foundVenue || null);
+        setMatchedVenues(foundVenues);
         setHasSearched(true);
-    };
+    }
 
-    const handleClearSearch = () => {
+    function handleClearSearch() {
         setSearchNumber('');
-        setMatchedVenue(null);
+        setMatchedVenues([]);
         setHasSearched(false);
-    };
+    }
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -81,15 +91,15 @@ export default function ExamVenueSearchScreen() {
 
                 <Text style={styles.title}>Exam Venue Search</Text>
                 <Text style={styles.subtitle}>
-                    Enter your index number to quickly find your exam room from the posted
-                    venue ranges.
+                    Enter your index number or reference number to find the exam venue range
+                    that matches your number.
                 </Text>
 
                 <View style={styles.searchCard}>
                     <Text style={styles.label}>Index / Reference Number</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Enter your index number"
+                        placeholder="Enter index or reference number"
                         placeholderTextColor={AppColors.mutedText}
                         value={searchNumber}
                         onChangeText={setSearchNumber}
@@ -107,59 +117,101 @@ export default function ExamVenueSearchScreen() {
                     )}
                 </View>
 
-                {hasSearched && matchedVenue && (
-                    <View style={styles.resultCard}>
-                        <Text style={styles.resultLabel}>Your Exam Venue</Text>
-                        <Text style={styles.venueText}>{matchedVenue.venue}</Text>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Course</Text>
-                            <Text style={styles.infoValue}>
-                                {matchedVenue.courseCode} - {matchedVenue.courseTitle}
-                            </Text>
-                        </View>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Date & Time</Text>
-                            <Text style={styles.infoValue}>
-                                {matchedVenue.examDate}, {matchedVenue.examTime}
-                            </Text>
-                        </View>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Range</Text>
-                            <Text style={styles.infoValue}>
-                                {matchedVenue.startIndex} - {matchedVenue.endIndex}
-                            </Text>
-                        </View>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Status</Text>
-                            <Text style={styles.infoValue}>{matchedVenue.status}</Text>
-                        </View>
-
-                        <Text style={styles.noteText}>{matchedVenue.note}</Text>
-                    </View>
-                )}
-
-                {hasSearched && !matchedVenue && (
+                {!hasSearched && (
                     <View style={styles.emptyCard}>
-                        <Text style={styles.emptyTitle}>No venue found yet</Text>
+                        <Text style={styles.emptyTitle}>Search for your exam venue</Text>
                         <Text style={styles.emptyText}>
-                            Your exam venue range may not have been uploaded yet. Please check
-                            again later or contact your course rep.
+                            Your venue result will appear here after you enter your index or
+                            reference number.
                         </Text>
                     </View>
                 )}
 
-                <View style={styles.guideCard}>
-                    <Text style={styles.guideTitle}>How this helps</Text>
-                    <Text style={styles.guideText}>
-                        Instead of walking around classrooms or searching WhatsApp images,
-                        students can enter their index number and instantly see the correct
-                        exam venue once the course rep uploads the ranges.
-                    </Text>
-                </View>
+                {hasSearched && matchedVenues.length > 0 && (
+                    <View style={styles.resultsSection}>
+                        <Text style={styles.sectionTitle}>
+                            {matchedVenues.length} matching venue
+                            {matchedVenues.length === 1 ? '' : 's'} found
+                        </Text>
+
+                        {matchedVenues.map((venueRecord) => (
+                            <View key={venueRecord.id} style={styles.resultCard}>
+                                <View style={styles.resultHeader}>
+                                    <Text style={styles.courseCode}>
+                                        {venueRecord.courseCode}
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            styles.statusBadge,
+                                            venueRecord.status === 'confirmed' &&
+                                            styles.confirmedBadge,
+                                        ]}
+                                    >
+                                        {formatStatusLabel(venueRecord.status)}
+                                    </Text>
+                                </View>
+
+                                <Text style={styles.courseTitle}>
+                                    {venueRecord.courseTitle}
+                                </Text>
+
+                                <View style={styles.infoBox}>
+                                    <Text style={styles.infoLabel}>Exam Date</Text>
+                                    <Text style={styles.infoValue}>
+                                        {venueRecord.examDate}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.infoBox}>
+                                    <Text style={styles.infoLabel}>Exam Time</Text>
+                                    <Text style={styles.infoValue}>
+                                        {venueRecord.examTime}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.infoBox}>
+                                    <Text style={styles.infoLabel}>Venue</Text>
+                                    <Text style={styles.infoValue}>
+                                        {venueRecord.venue}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.infoBox}>
+                                    <Text style={styles.infoLabel}>Building / Block</Text>
+                                    <Text style={styles.infoValue}>
+                                        {venueRecord.buildingOrBlock}
+                                    </Text>
+                                </View>
+
+                                {venueRecord.roomOrHall && (
+                                    <View style={styles.infoBox}>
+                                        <Text style={styles.infoLabel}>Room / Hall</Text>
+                                        <Text style={styles.infoValue}>
+                                            {venueRecord.roomOrHall}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                <View style={styles.rangeBox}>
+                                    <Text style={styles.rangeLabel}>Index Range</Text>
+                                    <Text style={styles.rangeValue}>
+                                        {venueRecord.startIndex} - {venueRecord.endIndex}
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {hasSearched && matchedVenues.length === 0 && (
+                    <View style={styles.emptyCard}>
+                        <Text style={styles.emptyTitle}>No venue found</Text>
+                        <Text style={styles.emptyText}>
+                            No exam venue range matches this index or reference number yet.
+                            Please check again later.
+                        </Text>
+                    </View>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
@@ -247,44 +299,91 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
-    resultCard: {
-        backgroundColor: AppColors.primary,
-        borderRadius: 18,
-        padding: 18,
+    resultsSection: {
         marginBottom: 18,
     },
-    resultLabel: {
-        color: AppColors.accent,
+    sectionTitle: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: AppColors.text,
+        marginBottom: 10,
+    },
+    resultCard: {
+        backgroundColor: AppColors.card,
+        borderRadius: 18,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: AppColors.border,
+        marginBottom: 14,
+    },
+    resultHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+        gap: 10,
+    },
+    courseCode: {
+        color: AppColors.primary,
         fontSize: 13,
         fontWeight: '900',
-        marginBottom: 8,
     },
-    venueText: {
+    statusBadge: {
+        backgroundColor: AppColors.warning,
         color: AppColors.card,
-        fontSize: 26,
+        fontSize: 11,
         fontWeight: '900',
-        marginBottom: 16,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 999,
+        overflow: 'hidden',
+        textTransform: 'uppercase',
     },
-    infoRow: {
+    confirmedBadge: {
+        backgroundColor: AppColors.success,
+    },
+    courseTitle: {
+        color: AppColors.text,
+        fontSize: 18,
+        fontWeight: '800',
+        marginBottom: 14,
+    },
+    infoBox: {
+        backgroundColor: AppColors.background,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: AppColors.border,
+        padding: 12,
         marginBottom: 10,
     },
     infoLabel: {
-        color: AppColors.accent,
         fontSize: 12,
-        fontWeight: '800',
-        marginBottom: 3,
+        color: AppColors.mutedText,
+        fontWeight: '700',
+        marginBottom: 4,
     },
     infoValue: {
-        color: AppColors.card,
         fontSize: 14,
-        fontWeight: '700',
+        color: AppColors.text,
+        fontWeight: '800',
         lineHeight: 20,
     },
-    noteText: {
+    rangeBox: {
+        backgroundColor: AppColors.primary,
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 2,
+    },
+    rangeLabel: {
+        fontSize: 12,
+        color: AppColors.accent,
+        fontWeight: '800',
+        marginBottom: 4,
+    },
+    rangeValue: {
+        fontSize: 15,
         color: AppColors.card,
-        fontSize: 14,
-        lineHeight: 20,
-        marginTop: 8,
+        fontWeight: '900',
     },
     emptyCard: {
         backgroundColor: AppColors.card,
@@ -304,23 +403,5 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: AppColors.mutedText,
         lineHeight: 21,
-    },
-    guideCard: {
-        backgroundColor: AppColors.card,
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: AppColors.border,
-    },
-    guideTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: AppColors.text,
-        marginBottom: 6,
-    },
-    guideText: {
-        fontSize: 14,
-        color: AppColors.mutedText,
-        lineHeight: 20,
     },
 });
