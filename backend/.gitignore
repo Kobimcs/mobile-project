@@ -1,0 +1,16 @@
+target/
+*.class
+*.jar
+*.war
+.env
+.env.*
+!.env.example
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Maven wrapper (optional - commit if you want)
+!.mvn/wrapper/maven-wrapper.jar

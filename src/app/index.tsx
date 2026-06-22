@@ -1,12 +1,12 @@
 import { AppColors } from '@/constants/colors';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -30,7 +30,15 @@ type LoginResponse = {
   };
 };
 
-const API_URL = 'http://10.0.2.2:8080/api';
+const API_URL = 'http://localhost:8080/api';
+
+async function saveItem(key: string, value: string) {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(key, value);
+  } else {
+    await SecureStore.setItemAsync(key, value);
+  }
+}
 
 export default function LoginScreen() {
   const [identifier, setIdentifier] = useState('');
@@ -54,9 +62,7 @@ export default function LoginScreen() {
 
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identifier: cleanedIdentifier,
           password: cleanedPassword,
@@ -64,39 +70,26 @@ export default function LoginScreen() {
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
         Alert.alert(
           'Login failed',
-          'Invalid index number, reference number, email, or password.'
+          errorData?.message || 'Invalid credentials. Please try again.'
         );
         return;
       }
 
       const data: LoginResponse = await response.json();
 
-      await SecureStore.setItemAsync('authToken', data.token);
-      await SecureStore.setItemAsync('userId', String(data.user.id));
-      await SecureStore.setItemAsync('userName', data.user.fullName);
-      await SecureStore.setItemAsync('userEmail', data.user.email);
-      await SecureStore.setItemAsync('userRole', data.user.role);
+      await saveItem('authToken', data.token);
+      await saveItem('userId', String(data.user.id));
+      await saveItem('userName', data.user.fullName);
+      await saveItem('userEmail', data.user.email);
+      await saveItem('userRole', data.user.role);
 
-      if (data.user.indexNumber) {
-        await SecureStore.setItemAsync('indexNumber', data.user.indexNumber);
-      }
-
-      if (data.user.referenceNumber) {
-        await SecureStore.setItemAsync(
-          'referenceNumber',
-          data.user.referenceNumber
-        );
-      }
-
-      if (data.user.programme) {
-        await SecureStore.setItemAsync('programme', data.user.programme);
-      }
-
-      if (data.user.level) {
-        await SecureStore.setItemAsync('level', data.user.level);
-      }
+      if (data.user.indexNumber) await saveItem('indexNumber', data.user.indexNumber);
+      if (data.user.referenceNumber) await saveItem('referenceNumber', data.user.referenceNumber);
+      if (data.user.programme) await saveItem('programme', data.user.programme);
+      if (data.user.level) await saveItem('level', data.user.level);
 
       if (data.user.role === 'student') {
         router.replace('/student-dashboard');
@@ -105,6 +98,11 @@ export default function LoginScreen() {
 
       if (data.user.role === 'course_rep') {
         router.replace('/rep-panel');
+        return;
+      }
+
+      if (data.user.role === 'admin') {
+        router.replace('/admin-panel');
         return;
       }
 
@@ -136,7 +134,6 @@ export default function LoginScreen() {
           onChangeText={setIdentifier}
           autoCapitalize="none"
           autoCorrect={false}
-          keyboardType="default"
         />
 
         <TextInput
@@ -171,68 +168,16 @@ export default function LoginScreen() {
     </KeyboardAvoidingView>
   );
 }
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: AppColors.background,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: AppColors.primary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: AppColors.mutedText,
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: AppColors.border,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    backgroundColor: AppColors.card,
-    color: AppColors.text,
-  },
-  button: {
-    height: 52,
-    backgroundColor: AppColors.primary,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  disabledButton: {
-    backgroundColor: AppColors.primaryDark,
-  },
-  buttonText: {
-    color: AppColors.card,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  linkText: {
-    marginTop: 22,
-    textAlign: 'center',
-    color: AppColors.primary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  secondaryLink: {
-    marginTop: 12,
-    textAlign: 'center',
-    color: AppColors.mutedText,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  container: { flex: 1, backgroundColor: AppColors.background },
+  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  title: { fontSize: 36, fontWeight: 'bold', color: AppColors.primary, marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 16, color: AppColors.mutedText, marginBottom: 32, textAlign: 'center' },
+  input: { height: 52, borderWidth: 1, borderColor: AppColors.border, borderRadius: 10, paddingHorizontal: 16, marginBottom: 16, fontSize: 16, backgroundColor: AppColors.card, color: AppColors.text },
+  button: { height: 52, backgroundColor: AppColors.primary, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 4 },
+  disabledButton: { backgroundColor: AppColors.primaryDark },
+  buttonText: { color: AppColors.card, fontSize: 16, fontWeight: '700' },
+  linkText: { marginTop: 22, textAlign: 'center', color: AppColors.primary, fontSize: 15, fontWeight: '600' },
+  secondaryLink: { marginTop: 12, textAlign: 'center', color: AppColors.mutedText, fontSize: 14, fontWeight: '500' },
 });
