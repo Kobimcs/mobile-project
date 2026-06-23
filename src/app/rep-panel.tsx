@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_URL = 'http://10.0.2.2:8080/api';
+const API_URL = 'https://mobile-project-production.up.railway.app/api';
 
 type ActivityItem = {
     id: number;
