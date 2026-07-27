@@ -49,7 +49,9 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/health").permitAll()
-                .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register",
+                        "/auth/forgot-password", "/auth/verify-reset-code", "/auth/reset-password")
+                    .permitAll()
                 .requestMatchers(HttpMethod.GET, "/exam-venues/search").permitAll()
                 // Paystack sends no JWT — the HMAC signature in PaymentController.webhook()
                 // IS the authentication for this one route. The callback page is just
