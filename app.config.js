@@ -9,6 +9,12 @@ module.exports = () => ({
     userInterfaceStyle: 'automatic',
     ios: {
       icon: './assets/expo.icon',
+      // Mirrors the Android <queries> plugin below: iOS also requires apps to
+      // declare which URL schemes they intend to query with canOpenURL, or it
+      // returns false for `maps://` even with a maps app installed.
+      infoPlist: {
+        LSApplicationQueriesSchemes: ['maps'],
+      },
     },
     android: {
       package: 'com.knust.classmate',
@@ -45,6 +51,9 @@ module.exports = () => ({
       'expo-notifications',
       'expo-sharing',
       'expo-dev-client',
+      // Adds the Android <queries> entry so canOpenURL('geo:...') works — see
+      // plugins/withMapsQueries.js.
+      './plugins/withMapsQueries',
     ],
     experiments: {
       typedRoutes: true,

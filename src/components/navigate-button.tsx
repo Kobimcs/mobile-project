@@ -1,25 +1,16 @@
 import { AppColors } from '@/constants/colors';
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { openMapsSearch } from '@/utils/open-maps';
+import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 /**
- * Opens Google Maps searching for a venue on KNUST campus. The backend does not
- * store coordinates, so we search by name — accurate enough for campus halls and
- * it works whether or not the Google Maps app is installed.
+ * Opens the native maps app searching for a venue on KNUST campus. The backend
+ * does not store coordinates, so we search by name — accurate enough for campus
+ * halls and it works whether or not a maps app is installed (falls back to the
+ * browser if not).
  */
 export function NavigateButton({ query }: { query: string }) {
     const openInMaps = async () => {
-        const search = `${query} KNUST Kumasi`.trim();
-        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(search)}`;
-        try {
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-                await Linking.openURL(url);
-            } else {
-                Alert.alert('Cannot open Maps', 'No maps application is available on this device.');
-            }
-        } catch {
-            Alert.alert('Cannot open Maps', 'Something went wrong opening the map.');
-        }
+        await openMapsSearch(`${query} KNUST Kumasi`.trim());
     };
 
     return (

@@ -9,12 +9,12 @@ import { apiRequest } from '@/services/api';
 import { CacheKeys, fetchWithCache } from '@/services/cache';
 import { syncReminders } from '@/services/notifications';
 import { getItem } from '@/services/storage';
+import { openMapsSearch } from '@/utils/open-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Linking,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -90,8 +90,7 @@ function initials(name: string): string {
 }
 
 function openInMaps(venue: string) {
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue} KNUST Kumasi`)}`;
-    Linking.openURL(url).catch(() => {});
+    openMapsSearch(`${venue} KNUST Kumasi`);
 }
 
 const quickActions: { label: string; icon: IconName; route: string }[] = [

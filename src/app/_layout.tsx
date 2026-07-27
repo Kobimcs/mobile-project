@@ -59,6 +59,7 @@ function RootNavigator() {
       <Stack.Screen name="index" />
       <Stack.Screen name="register" />
       <Stack.Screen name="forgot-password" />
+      <Stack.Screen name="reset-password" />
 
       {/* Any signed-in user — student and shared screens */}
       <Stack.Protected guard={isAuthenticated}>
