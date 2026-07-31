@@ -12,6 +12,7 @@ public record ProfileResponse(
     String bio,
     String programme,
     String level,
+    String classGroup,
     String avatarUrl
 ) {
     public static ProfileResponse from(User user) {
@@ -24,6 +25,7 @@ public record ProfileResponse(
             user.getBio(),
             user.getProgramme(),
             user.getLevel(),
+            user.getClassGroup(),
             user.getAvatarUrl()
         );
     }
