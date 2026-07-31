@@ -18,8 +18,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 @Service
 public class AuthService {
+
+    // Class group only applies to this programme; matched case-insensitively
+    // and trimmed since "programme" is free text on the registration form.
+    private static final String COMPUTER_SCIENCE_PROGRAMME = "Computer Science";
+    private static final Set<String> VALID_CLASS_GROUPS = Set.of("Group 1", "Group 2");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -55,6 +62,20 @@ public class AuthService {
         if (userRepository.existsByReferenceNumber(request.referenceNumber().toUpperCase()))
             throw new ApiException(HttpStatus.CONFLICT, "An account with this reference number already exists.");
 
+        boolean isComputerScience = request.programme() != null
+            && request.programme().trim().equalsIgnoreCase(COMPUTER_SCIENCE_PROGRAMME);
+
+        String classGroup = null;
+        if (isComputerScience) {
+            String submitted = request.classGroup() == null ? null : request.classGroup().trim();
+            if (submitted == null || submitted.isEmpty())
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Class group is required for Computer Science students.");
+            if (!VALID_CLASS_GROUPS.contains(submitted))
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Class group must be either \"Group 1\" or \"Group 2\".");
+            classGroup = submitted;
+        }
+        // Non-CS students never get a class group, even if one was sent.
+
         // Everyone registers as a student. Only an admin can promote a student
         // to course rep afterwards — self-selecting a role is not allowed.
         User user = User.builder()
@@ -65,7 +86,7 @@ public class AuthService {
             .password(passwordEncoder.encode(request.password()))
             .programme(request.programme())
             .level(request.level())
-            .classGroup(request.classGroup())
+            .classGroup(classGroup)
             .role(UserRole.STUDENT)
             .status("ACTIVE")
             .build();
