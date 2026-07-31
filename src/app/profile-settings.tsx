@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -38,6 +39,10 @@ type ProfileResponse = {
     level: string | null;
 };
 
+function initials(name: string): string {
+    return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'S';
+}
+
 export default function ProfileSettingsScreen() {
     const handleSignOut = useSignOut();
     const { token, user, updateUser } = useAuth();
@@ -53,6 +58,14 @@ export default function ProfileSettingsScreen() {
     const phone = user?.phone || '';
     const bio = user?.bio || '';
     const role = user?.role || 'student';
+    const referenceNumber = user?.referenceNumber || '';
+
+    // "Year Group" and "Class Group" are not part of AuthUser or the
+    // GET /profile/me response today (see ProfileResponse in this file and
+    // AuthUser in context/auth-context.tsx) — placeholders until the backend
+    // exposes them, rather than inventing values or a new API call.
+    const yearGroup = 'Not available yet';
+    const classGroup = 'Not available yet';
 
     const [classReminders, setClassReminders] = useState(true);
     const [assignmentReminders, setAssignmentReminders] = useState(true);
@@ -142,26 +155,82 @@ export default function ProfileSettingsScreen() {
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
             <ScrollView contentContainerStyle={styles.container}>
-                <View style={styles.header}>
-                    {isManager && (
-                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-                            <Ionicons name="chevron-back" size={22} color={AppColors.text} />
-                        </TouchableOpacity>
-                    )}
+                <View style={styles.topHeaderCard}>
+                    <View style={styles.topHeaderLeft}>
+                        {isManager && (
+                            <TouchableOpacity onPress={() => router.back()} style={styles.topHeaderBackButton} hitSlop={8}>
+                                <Ionicons name="chevron-back" size={20} color={AppColors.text} />
+                            </TouchableOpacity>
+                        )}
+                        <Text style={styles.topHeaderTitle}>Profile</Text>
+                    </View>
 
-                    <Text style={styles.headerTitle}>Profile & Settings</Text>
-                    <Text style={styles.headerSubtitle}>
-                        Manage your academic profile, reminders, and subscription status.
-                    </Text>
+                    <TouchableOpacity
+                        style={styles.bellButton}
+                        onPress={() => router.push('/announcements')}
+                        hitSlop={8}
+                    >
+                        <Ionicons name="notifications-outline" size={20} color={AppColors.text} />
+                    </TouchableOpacity>
+                </View>
+
+                <LinearGradient
+                    colors={[AppColors.primary, AppColors.primaryDark]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.heroCard}
+                >
+                    <View style={styles.heroTopRow}>
+                        <View style={styles.avatarWrap}>
+                            <View style={styles.avatar}>
+                                <Text style={styles.avatarText}>{initials(fullName)}</Text>
+                            </View>
+                            {/* Static badge — there's no backend "verified" flag yet, so this
+                                is a decorative visual element rather than data-driven. */}
+                            <View style={styles.verifiedBadge}>
+                                <Ionicons name="checkmark" size={11} color={AppColors.card} />
+                            </View>
+                        </View>
+
+                        <View style={styles.heroNameBlock}>
+                            <Text style={styles.heroName} numberOfLines={1}>{fullName}</Text>
+                            <Text style={styles.heroReference} numberOfLines={1}>
+                                Reference: {referenceNumber || 'Not available yet'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.heroSubBoxFull}>
+                        <Text style={styles.heroSubLabel}>Programme</Text>
+                        <Text style={styles.heroSubValue}>{programme || 'Not available yet'}</Text>
+                    </View>
+
+                    <View style={styles.heroSubRow}>
+                        <View style={[styles.heroSubBox, { marginRight: 10 }]}>
+                            <Text style={styles.heroSubLabel}>Year Group</Text>
+                            <Text style={styles.heroSubValue}>{yearGroup}</Text>
+                        </View>
+                        <View style={styles.heroSubBox}>
+                            <Text style={styles.heroSubLabel}>Class Group</Text>
+                            <Text style={styles.heroSubValue}>{classGroup}</Text>
+                        </View>
+                    </View>
+                </LinearGradient>
+
+                <View style={styles.heroActionsRow}>
+                    <TouchableOpacity style={styles.heroPrimaryButton} onPress={() => router.push('/edit-profile')}>
+                        <Ionicons name="create-outline" size={16} color={AppColors.card} />
+                        <Text style={styles.heroPrimaryButtonText}>Edit Profile</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.heroOutlineButton} onPress={() => router.push('/change-password')}>
+                        <Ionicons name="lock-closed-outline" size={16} color={AppColors.primary} />
+                        <Text style={styles.heroOutlineButtonText}>Change Password</Text>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.card}>
                     <Text style={styles.sectionTitle}>Academic Profile</Text>
-
-                    <View style={styles.profileRow}>
-                        <Text style={styles.label}>Name</Text>
-                        <Text style={styles.value}>{fullName}</Text>
-                    </View>
 
                     <View style={styles.profileRow}>
                         <View style={styles.labelRow}>
@@ -193,11 +262,6 @@ export default function ProfileSettingsScreen() {
                     </View>
 
                     <View style={styles.profileRow}>
-                        <Text style={styles.label}>Programme</Text>
-                        <Text style={styles.value}>{programme || 'Not available yet'}</Text>
-                    </View>
-
-                    <View style={styles.profileRow}>
                         <Text style={styles.label}>Level</Text>
                         <Text style={styles.value}>{level || 'Not available yet'}</Text>
                     </View>
@@ -206,17 +270,6 @@ export default function ProfileSettingsScreen() {
                         <Text style={styles.label}>Role</Text>
                         <Text style={styles.roleBadge}>{role}</Text>
                     </View>
-
-                    <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/edit-profile')}>
-                        <Text style={styles.primaryButtonText}>Edit Profile</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.outlineButton, { marginTop: 10 }]}
-                        onPress={() => router.push('/change-password')}
-                    >
-                        <Text style={styles.outlineButtonText}>Change Password</Text>
-                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.card}>
@@ -324,26 +377,159 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 40,
     },
-    header: {
-        marginBottom: 20,
+    topHeaderCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: AppColors.card,
+        borderRadius: 18,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: AppColors.border,
     },
-    backButton: {
-        alignSelf: 'flex-start',
-        marginBottom: 12,
-        width: 40, height: 40, borderRadius: 12, backgroundColor: AppColors.card,
+    topHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    topHeaderBackButton: {
+        width: 34, height: 34, borderRadius: 10, backgroundColor: AppColors.background,
         borderWidth: 1, borderColor: AppColors.border, justifyContent: 'center', alignItems: 'center',
     },
-    headerTitle: {
-        fontSize: 26,
+    topHeaderTitle: {
+        fontSize: 22,
         fontFamily: Fonts.heading,
         color: AppColors.text,
     },
-    headerSubtitle: {
-        marginTop: 6,
-        fontSize: 14,
-        lineHeight: 20,
-        color: AppColors.mutedText,
+    bellButton: {
+        width: 42, height: 42, borderRadius: 21, backgroundColor: AppColors.background,
+        borderWidth: 1, borderColor: AppColors.border, justifyContent: 'center', alignItems: 'center',
+    },
+    heroCard: {
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 16,
+    },
+    heroTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 18,
+    },
+    avatarWrap: {
+        marginRight: 14,
+    },
+    avatar: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: AppColors.card + '26',
+        borderWidth: 1,
+        borderColor: AppColors.card + '40',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: {
+        fontSize: 22,
+        fontFamily: Fonts.bodyBold,
+        color: AppColors.card,
+    },
+    verifiedBadge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: AppColors.success,
+        borderWidth: 2,
+        borderColor: AppColors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    heroNameBlock: {
+        flex: 1,
+    },
+    heroName: {
+        fontSize: 19,
+        fontFamily: Fonts.bodyBold,
+        color: AppColors.card,
+    },
+    heroReference: {
+        marginTop: 4,
+        fontSize: 13,
         fontFamily: Fonts.body,
+        color: AppColors.card + 'CC',
+    },
+    heroSubBoxFull: {
+        backgroundColor: AppColors.card + '1F',
+        borderWidth: 1,
+        borderColor: AppColors.card + '33',
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        marginBottom: 10,
+    },
+    heroSubRow: {
+        flexDirection: 'row',
+    },
+    heroSubBox: {
+        flex: 1,
+        backgroundColor: AppColors.card + '1F',
+        borderWidth: 1,
+        borderColor: AppColors.card + '33',
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+    },
+    heroSubLabel: {
+        fontSize: 11,
+        fontFamily: Fonts.body,
+        color: AppColors.card + 'B3',
+        marginBottom: 3,
+    },
+    heroSubValue: {
+        fontSize: 14,
+        fontFamily: Fonts.bodyBold,
+        color: AppColors.card,
+    },
+    heroActionsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 16,
+    },
+    heroPrimaryButton: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: 6,
+        backgroundColor: AppColors.primary,
+        paddingVertical: 14,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    heroPrimaryButtonText: {
+        color: AppColors.card,
+        fontFamily: Fonts.bodyBold,
+        fontSize: 14,
+    },
+    heroOutlineButton: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: 6,
+        backgroundColor: AppColors.card,
+        borderWidth: 1,
+        borderColor: AppColors.primary,
+        paddingVertical: 14,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    heroOutlineButtonText: {
+        color: AppColors.primary,
+        fontFamily: Fonts.bodyBold,
+        fontSize: 14,
     },
     card: {
         backgroundColor: AppColors.card,
@@ -429,16 +615,6 @@ const styles = StyleSheet.create({
         color: AppColors.mutedText,
         marginBottom: 14,
         fontFamily: Fonts.body,
-    },
-    primaryButton: {
-        backgroundColor: AppColors.primary,
-        paddingVertical: 14,
-        borderRadius: 14,
-        alignItems: 'center',
-    },
-    primaryButtonText: {
-        color: AppColors.card,
-        fontFamily: Fonts.bodyBold,
     },
     outlineButton: {
         borderWidth: 1,
