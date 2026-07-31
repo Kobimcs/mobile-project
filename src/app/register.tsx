@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -46,7 +47,90 @@ function Field({ icon, label, borderColor, rightSlot, ...inputProps }: FieldProp
     );
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LEVEL_OPTIONS = ['100', '200', '300', '400', '500', '600'] as const;
+
+type LevelFieldProps = {
+    value: string;
+    onSelect: (value: string) => void;
+    borderColor?: string;
+};
+
+function LevelField({ value, onSelect, borderColor }: LevelFieldProps) {
+    const [visible, setVisible] = useState(false);
+
+    return (
+        <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Level</Text>
+            <TouchableOpacity
+                style={[styles.field, borderColor ? { borderColor } : null]}
+                onPress={() => setVisible(true)}
+                activeOpacity={0.7}
+            >
+                <Ionicons name="layers-outline" size={18} color={AppColors.mutedText} />
+                <Text style={[styles.input, !value && styles.placeholderText]}>
+                    {value ? `Level ${value}` : 'Select your level'}
+                </Text>
+                <Ionicons name="chevron-down" size={18} color={AppColors.mutedText} />
+            </TouchableOpacity>
+
+            <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+                    <TouchableOpacity style={styles.modalSheet} activeOpacity={1} onPress={() => {}}>
+                        <Text style={styles.modalTitle}>Select your level</Text>
+                        {LEVEL_OPTIONS.map((option) => (
+                            <TouchableOpacity
+                                key={option}
+                                style={styles.modalOption}
+                                onPress={() => {
+                                    onSelect(option);
+                                    setVisible(false);
+                                }}
+                            >
+                                <Text style={styles.modalOptionText}>Level {option}</Text>
+                                {value === option && <Ionicons name="checkmark" size={18} color={AppColors.primary} />}
+                            </TouchableOpacity>
+                        ))}
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+        </View>
+    );
+}
+
+type StepIndicatorProps = { step: 1 | 2 | 3 };
+
+const STEP_LABELS = ['Basic Info', 'Academic Info', 'Security'];
+
+function StepIndicator({ step }: StepIndicatorProps) {
+    return (
+        <View style={styles.stepIndicatorWrap}>
+            <Text style={styles.stepIndicatorText}>
+                Step {step} of 3 · {STEP_LABELS[step - 1]}
+            </Text>
+            <View style={styles.stepBarTrack}>
+                {[1, 2, 3].map((s) => (
+                    <View
+                        key={s}
+                        style={[styles.stepBarSegment, s <= step ? styles.stepBarSegmentActive : styles.stepBarSegmentInactive]}
+                    />
+                ))}
+            </View>
+        </View>
+    );
+}
+
+type StepErrors = Partial<Record<
+    'fullName' | 'indexNumber' | 'referenceNumber' | 'programme' | 'email' | 'level' | 'password' | 'confirmPassword',
+    string
+>>;
+
 export default function RegisterScreen() {
+    const [step, setStep] = useState<1 | 2 | 3>(1);
+    const [errors, setErrors] = useState<StepErrors>({});
+
+    // All field values live here, at the parent level, so they survive
+    // Back/Next navigation between steps instead of resetting per-step.
     const [fullName, setFullName] = useState('');
     const [indexNumber, setIndexNumber] = useState('');
     const [referenceNumber, setReferenceNumber] = useState('');
@@ -62,15 +146,45 @@ export default function RegisterScreen() {
     const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
     const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
+    function validateStep1(): boolean {
+        const next: StepErrors = {};
+        if (!fullName.trim()) next.fullName = 'Please enter your full name.';
+        if (!indexNumber.trim()) next.indexNumber = 'Please enter your index number.';
+        if (!referenceNumber.trim()) next.referenceNumber = 'Please enter your reference number.';
+        setErrors(next);
+        return Object.keys(next).length === 0;
+    }
+
+    function validateStep2(): boolean {
+        const next: StepErrors = {};
+        if (!programme.trim()) next.programme = 'Please enter your programme.';
+        if (!email.trim()) next.email = 'Please enter your email address.';
+        else if (!EMAIL_REGEX.test(email.trim())) next.email = 'Please enter a valid email address.';
+        if (!level.trim()) next.level = 'Please select your level.';
+        setErrors(next);
+        return Object.keys(next).length === 0;
+    }
+
+    function validateStep3(): boolean {
+        const next: StepErrors = {};
+        if (password.length < 6) next.password = 'Password must be at least 6 characters.';
+        if (password !== confirmPassword) next.confirmPassword = 'Both passwords must match.';
+        setErrors(next);
+        return Object.keys(next).length === 0;
+    }
+
+    function handleNext() {
+        const isValid = step === 1 ? validateStep1() : validateStep2();
+        if (isValid) setStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s));
+    }
+
+    function handleBack() {
+        setErrors({});
+        setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s));
+    }
+
     const handleRegister = async () => {
-        if (!fullName.trim()) { Alert.alert('Missing field', 'Please enter your full name.'); return; }
-        if (!indexNumber.trim()) { Alert.alert('Missing field', 'Please enter your index number.'); return; }
-        if (!referenceNumber.trim()) { Alert.alert('Missing field', 'Please enter your reference number.'); return; }
-        if (!email.trim() || !email.includes('@')) { Alert.alert('Invalid email', 'Please enter a valid email address.'); return; }
-        if (!programme.trim()) { Alert.alert('Missing field', 'Please enter your programme.'); return; }
-        if (!level.trim()) { Alert.alert('Missing field', 'Please enter your level.'); return; }
-        if (password.length < 6) { Alert.alert('Weak password', 'Password must be at least 6 characters.'); return; }
-        if (password !== confirmPassword) { Alert.alert('Password mismatch', 'Both passwords must match.'); return; }
+        if (!validateStep3()) return;
 
         try {
             setIsLoading(true);
@@ -112,48 +226,138 @@ export default function RegisterScreen() {
                 <Text style={styles.heading}>Create your account</Text>
                 <Text style={styles.subtitle}>Register with your KNUST student details to get started.</Text>
 
-                <Field label="Full name" icon="person-outline" value={fullName} onChangeText={setFullName} autoCapitalize="words" />
-                <Field label="Index number" icon="id-card-outline" value={indexNumber} onChangeText={setIndexNumber} autoCapitalize="characters" autoCorrect={false} />
-                <Field label="Reference number" icon="card-outline" value={referenceNumber} onChangeText={setReferenceNumber} autoCapitalize="characters" autoCorrect={false} />
-                <Field label="Email" icon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-                <Field label="Programme" icon="book-outline" value={programme} onChangeText={setProgramme} autoCapitalize="words" />
-                <Field label="Level" icon="layers-outline" value={level} onChangeText={setLevel} keyboardType="number-pad" />
+                <StepIndicator step={step} />
 
-                <Field
-                    label="Password"
-                    icon="lock-closed-outline"
-                   
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    rightSlot={
-                        <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
-                            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={AppColors.mutedText} />
-                        </TouchableOpacity>
-                    }
-                />
-                {password.length > 0 && (
-                    <View style={styles.strengthRow}>
-                        <View style={[styles.strengthBar, { backgroundColor: passwordStrength.color }]} />
-                        <Text style={[styles.strengthLabel, { color: passwordStrength.color }]}>{passwordStrength.label}</Text>
-                    </View>
+                {step === 1 && (
+                    <>
+                        <Field
+                            label="Full name"
+                            icon="person-outline"
+                            value={fullName}
+                            onChangeText={setFullName}
+                            autoCapitalize="words"
+                            borderColor={errors.fullName ? AppColors.danger : undefined}
+                        />
+                        {errors.fullName && <Text style={styles.errorText}>{errors.fullName}</Text>}
+
+                        <Field
+                            label="Index number"
+                            icon="id-card-outline"
+                            value={indexNumber}
+                            onChangeText={setIndexNumber}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            borderColor={errors.indexNumber ? AppColors.danger : undefined}
+                        />
+                        {errors.indexNumber && <Text style={styles.errorText}>{errors.indexNumber}</Text>}
+
+                        <Field
+                            label="Reference number"
+                            icon="card-outline"
+                            value={referenceNumber}
+                            onChangeText={setReferenceNumber}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            borderColor={errors.referenceNumber ? AppColors.danger : undefined}
+                        />
+                        {errors.referenceNumber && <Text style={styles.errorText}>{errors.referenceNumber}</Text>}
+                    </>
                 )}
 
-                <Field
-                    label="Confirm password"
-                    icon="lock-closed-outline"
-                   
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showPassword}
-                    borderColor={passwordsMismatch ? AppColors.danger : passwordsMatch ? AppColors.success : undefined}
-                />
-                {passwordsMismatch && <Text style={styles.errorText}>Passwords do not match</Text>}
-                {passwordsMatch && <Text style={styles.successText}>Passwords match</Text>}
+                {step === 2 && (
+                    <>
+                        <Field
+                            label="Programme"
+                            icon="book-outline"
+                            value={programme}
+                            onChangeText={setProgramme}
+                            autoCapitalize="words"
+                            borderColor={errors.programme ? AppColors.danger : undefined}
+                        />
+                        {errors.programme && <Text style={styles.errorText}>{errors.programme}</Text>}
 
-                <TouchableOpacity style={[styles.button, isLoading && styles.disabledButton]} onPress={handleRegister} disabled={isLoading}>
-                    {isLoading ? <ActivityIndicator color={AppColors.card} /> : <Text style={styles.buttonText}>Create account</Text>}
-                </TouchableOpacity>
+                        <Field
+                            label="Email"
+                            icon="mail-outline"
+                            value={email}
+                            onChangeText={setEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            borderColor={errors.email ? AppColors.danger : undefined}
+                        />
+                        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+
+                        <LevelField value={level} onSelect={setLevel} borderColor={errors.level ? AppColors.danger : undefined} />
+                        {errors.level && <Text style={styles.errorText}>{errors.level}</Text>}
+                    </>
+                )}
+
+                {step === 3 && (
+                    <>
+                        <Field
+                            label="Password"
+                            icon="lock-closed-outline"
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry={!showPassword}
+                            borderColor={errors.password ? AppColors.danger : undefined}
+                            rightSlot={
+                                <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                                    <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={AppColors.mutedText} />
+                                </TouchableOpacity>
+                            }
+                        />
+                        {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+                        {password.length > 0 && (
+                            <View style={styles.strengthRow}>
+                                <View style={[styles.strengthBar, { backgroundColor: passwordStrength.color }]} />
+                                <Text style={[styles.strengthLabel, { color: passwordStrength.color }]}>{passwordStrength.label}</Text>
+                            </View>
+                        )}
+
+                        <Field
+                            label="Confirm password"
+                            icon="lock-closed-outline"
+                            value={confirmPassword}
+                            onChangeText={setConfirmPassword}
+                            secureTextEntry={!showPassword}
+                            borderColor={
+                                errors.confirmPassword || passwordsMismatch
+                                    ? AppColors.danger
+                                    : passwordsMatch
+                                        ? AppColors.success
+                                        : undefined
+                            }
+                        />
+                        {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+                        {!errors.confirmPassword && passwordsMismatch && <Text style={styles.errorText}>Passwords do not match</Text>}
+                        {passwordsMatch && <Text style={styles.successText}>Passwords match</Text>}
+                    </>
+                )}
+
+                <View style={styles.stepButtonsRow}>
+                    {step > 1 && (
+                        <TouchableOpacity style={styles.backStepButton} onPress={handleBack}>
+                            <Ionicons name="chevron-back" size={18} color={AppColors.primary} />
+                            <Text style={styles.backStepButtonText}>Back</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {step < 3 ? (
+                        <TouchableOpacity style={[styles.button, styles.nextButton]} onPress={handleNext}>
+                            <Text style={styles.buttonText}>Next</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={[styles.button, styles.nextButton, isLoading && styles.disabledButton]}
+                            onPress={handleRegister}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? <ActivityIndicator color={AppColors.card} /> : <Text style={styles.buttonText}>Create account</Text>}
+                        </TouchableOpacity>
+                    )}
+                </View>
 
                 <View style={styles.footerRow}>
                     <Text style={styles.footerText}>Already have an account?</Text>
@@ -197,4 +401,52 @@ const styles = StyleSheet.create({
     footerRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 22 },
     footerText: { fontSize: 14, color: AppColors.mutedText, fontFamily: Fonts.body },
     footerLink: { fontSize: 14, fontFamily: Fonts.bodyBold, color: AppColors.primary },
+    placeholderText: { color: AppColors.mutedText },
+    stepIndicatorWrap: { marginBottom: 22 },
+    stepIndicatorText: {
+        fontSize: 13,
+        fontFamily: Fonts.bodyMedium,
+        color: AppColors.mutedText,
+        marginBottom: 8,
+    },
+    stepBarTrack: { flexDirection: 'row', gap: 6 },
+    stepBarSegment: { flex: 1, height: 5, borderRadius: 3 },
+    stepBarSegmentActive: { backgroundColor: AppColors.primary },
+    stepBarSegmentInactive: { backgroundColor: AppColors.border },
+    stepButtonsRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
+    nextButton: { flex: 1, marginTop: 0 },
+    backStepButton: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2,
+        height: 54, paddingHorizontal: 18, borderRadius: 14,
+        borderWidth: 1, borderColor: AppColors.primary,
+    },
+    backStepButtonText: { color: AppColors.primary, fontSize: 15, fontFamily: Fonts.bodyBold },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'flex-end',
+    },
+    modalSheet: {
+        backgroundColor: AppColors.card,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingHorizontal: 20,
+        paddingTop: 18,
+        paddingBottom: 32,
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontFamily: Fonts.headingSemi,
+        color: AppColors.text,
+        marginBottom: 12,
+    },
+    modalOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: AppColors.border,
+    },
+    modalOptionText: { fontSize: 15, fontFamily: Fonts.body, color: AppColors.text },
 });
