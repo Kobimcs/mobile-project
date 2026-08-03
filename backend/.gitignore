@@ -1,0 +1,4 @@
+# Real student data used to validate the lab exam PDF parser locally — never
+# commit it, since it contains real names, index numbers and reference numbers.
+# See LabExamRealSampleValidationTest, which skips itself if this is absent.
+src/test/resources/lab-exam-sample.pdf
