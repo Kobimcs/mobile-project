@@ -53,6 +53,9 @@ public class SecurityConfig {
                         "/auth/forgot-password", "/auth/verify-reset-code", "/auth/reset-password")
                     .permitAll()
                 .requestMatchers(HttpMethod.GET, "/exam-venues/search").permitAll()
+                // Any signed-in user (including students) may search the lab
+                // exam PDF list / range fallback for their own venue.
+                .requestMatchers(HttpMethod.GET, "/exam-venues/lookup").authenticated()
                 // Paystack sends no JWT — the HMAC signature in PaymentController.webhook()
                 // IS the authentication for this one route. The callback page is just
                 // where the checkout browser redirects to; it carries no auth either.
@@ -61,7 +64,7 @@ public class SecurityConfig {
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 // Only course reps and admins can create academic records; students are read-only.
                 .requestMatchers(HttpMethod.POST, "/announcements", "/assignments", "/timetable",
-                        "/exam-venues", "/exam-venues/bulk", "/scores", "/scores/bulk",
+                        "/exam-venues", "/exam-venues/bulk", "/exam-venues/upload-pdf", "/scores", "/scores/bulk",
                         "/timetable/document")
                     .hasAnyRole("COURSE_REP", "ADMIN")
                 // Attaching a document to an assignment is rep/admin only.
