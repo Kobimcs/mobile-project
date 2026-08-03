@@ -49,6 +49,12 @@ function Field({ icon, label, borderColor, rightSlot, ...inputProps }: FieldProp
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LEVEL_OPTIONS = ['100', '200', '300', '400', '500', '600'] as const;
+const CLASS_GROUP_OPTIONS = ['Group 1', 'Group 2'] as const;
+
+// Matches the backend's case-insensitive, trimmed comparison for programme.
+function isComputerScience(programme: string): boolean {
+    return programme.trim().toLowerCase() === 'computer science';
+}
 
 type LevelFieldProps = {
     value: string;
@@ -98,6 +104,54 @@ function LevelField({ value, onSelect, borderColor }: LevelFieldProps) {
     );
 }
 
+type ClassGroupFieldProps = {
+    value: string;
+    onSelect: (value: string) => void;
+    borderColor?: string;
+};
+
+function ClassGroupField({ value, onSelect, borderColor }: ClassGroupFieldProps) {
+    const [visible, setVisible] = useState(false);
+
+    return (
+        <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Class Group</Text>
+            <TouchableOpacity
+                style={[styles.field, borderColor ? { borderColor } : null]}
+                onPress={() => setVisible(true)}
+                activeOpacity={0.7}
+            >
+                <Ionicons name="people-outline" size={18} color={AppColors.mutedText} />
+                <Text style={[styles.input, !value && styles.placeholderText]}>
+                    {value || 'Select your class group'}
+                </Text>
+                <Ionicons name="chevron-down" size={18} color={AppColors.mutedText} />
+            </TouchableOpacity>
+
+            <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+                    <TouchableOpacity style={styles.modalSheet} activeOpacity={1} onPress={() => {}}>
+                        <Text style={styles.modalTitle}>Select your class group</Text>
+                        {CLASS_GROUP_OPTIONS.map((option) => (
+                            <TouchableOpacity
+                                key={option}
+                                style={styles.modalOption}
+                                onPress={() => {
+                                    onSelect(option);
+                                    setVisible(false);
+                                }}
+                            >
+                                <Text style={styles.modalOptionText}>{option}</Text>
+                                {value === option && <Ionicons name="checkmark" size={18} color={AppColors.primary} />}
+                            </TouchableOpacity>
+                        ))}
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+        </View>
+    );
+}
+
 type StepIndicatorProps = { step: 1 | 2 | 3 };
 
 const STEP_LABELS = ['Basic Info', 'Academic Info', 'Security'];
@@ -121,7 +175,7 @@ function StepIndicator({ step }: StepIndicatorProps) {
 }
 
 type StepErrors = Partial<Record<
-    'fullName' | 'indexNumber' | 'referenceNumber' | 'programme' | 'email' | 'level' | 'password' | 'confirmPassword',
+    'fullName' | 'indexNumber' | 'referenceNumber' | 'programme' | 'email' | 'level' | 'classGroup' | 'password' | 'confirmPassword',
     string
 >>;
 
@@ -137,6 +191,7 @@ export default function RegisterScreen() {
     const [email, setEmail] = useState('');
     const [programme, setProgramme] = useState('');
     const [level, setLevel] = useState('');
+    const [classGroup, setClassGroup] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -161,8 +216,14 @@ export default function RegisterScreen() {
         if (!email.trim()) next.email = 'Please enter your email address.';
         else if (!EMAIL_REGEX.test(email.trim())) next.email = 'Please enter a valid email address.';
         if (!level.trim()) next.level = 'Please select your level.';
+        if (isComputerScience(programme) && !classGroup.trim()) next.classGroup = 'Please select your class group.';
         setErrors(next);
         return Object.keys(next).length === 0;
+    }
+
+    function handleProgrammeChange(text: string) {
+        setProgramme(text);
+        if (!isComputerScience(text)) setClassGroup('');
     }
 
     function validateStep3(): boolean {
@@ -198,6 +259,7 @@ export default function RegisterScreen() {
                     email: email.trim().toLowerCase(),
                     programme: programme.trim(),
                     level: level.trim(),
+                    classGroup: isComputerScience(programme) ? classGroup.trim() : null,
                     password: password.trim(),
                 }),
             });
@@ -270,7 +332,7 @@ export default function RegisterScreen() {
                             label="Programme"
                             icon="book-outline"
                             value={programme}
-                            onChangeText={setProgramme}
+                            onChangeText={handleProgrammeChange}
                             autoCapitalize="words"
                             borderColor={errors.programme ? AppColors.danger : undefined}
                         />
@@ -290,6 +352,17 @@ export default function RegisterScreen() {
 
                         <LevelField value={level} onSelect={setLevel} borderColor={errors.level ? AppColors.danger : undefined} />
                         {errors.level && <Text style={styles.errorText}>{errors.level}</Text>}
+
+                        {isComputerScience(programme) && (
+                            <>
+                                <ClassGroupField
+                                    value={classGroup}
+                                    onSelect={setClassGroup}
+                                    borderColor={errors.classGroup ? AppColors.danger : undefined}
+                                />
+                                {errors.classGroup && <Text style={styles.errorText}>{errors.classGroup}</Text>}
+                            </>
+                        )}
                     </>
                 )}
 

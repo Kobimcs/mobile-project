@@ -13,6 +13,8 @@ export type AuthUser = {
     referenceNumber?: string;
     programme?: string;
     level?: string;
+    // Only set for Computer Science students; undefined/null otherwise.
+    classGroup?: string;
     // Not returned by /auth/login — populated once the profile screen fetches
     // GET /profile/me, then kept current via updateUser() after edits.
     phone?: string;
@@ -48,6 +50,7 @@ const SESSION_KEYS = [
     'referenceNumber',
     'programme',
     'level',
+    'classGroup',
 ] as const;
 
 // Per-student state that must not leak to the next person who signs in on the
@@ -78,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         (async () => {
             try {
-                const [storedToken, storedRole, id, fullName, email, indexNumber, referenceNumber, programme, level] =
+                const [storedToken, storedRole, id, fullName, email, indexNumber, referenceNumber, programme, level, classGroup] =
                     await Promise.all([
                         getItem('authToken'),
                         getItem('userRole'),
@@ -89,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         getItem('referenceNumber'),
                         getItem('programme'),
                         getItem('level'),
+                        getItem('classGroup'),
                     ]);
                 setToken(storedToken);
                 setRole(storedRole as UserRole | null);
@@ -102,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         referenceNumber: referenceNumber ?? undefined,
                         programme: programme ?? undefined,
                         level: level ?? undefined,
+                        classGroup: classGroup ?? undefined,
                     });
                 }
             } finally {
@@ -126,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (newUser.referenceNumber) await setItem('referenceNumber', newUser.referenceNumber);
             if (newUser.programme) await setItem('programme', newUser.programme);
             if (newUser.level) await setItem('level', newUser.level);
+            if (newUser.classGroup) await setItem('classGroup', newUser.classGroup);
 
             setToken(newToken);
             setRole(newUser.role);
@@ -154,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (updates.email !== undefined) await setItem('userEmail', updates.email);
             if (updates.programme !== undefined) await setItem('programme', updates.programme ?? '');
             if (updates.level !== undefined) await setItem('level', updates.level ?? '');
+            if (updates.classGroup !== undefined) await setItem('classGroup', updates.classGroup ?? '');
         },
     }), [token, role, user, isLoading]);
 

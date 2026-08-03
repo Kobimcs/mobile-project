@@ -37,10 +37,17 @@ type ProfileResponse = {
     bio: string | null;
     programme: string | null;
     level: string | null;
+    classGroup: string | null;
 };
 
 function initials(name: string): string {
     return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'S';
+}
+
+function roleLabel(role: string): string {
+    if (role === 'course_rep') return 'Course Rep';
+    if (role === 'admin') return 'Admin';
+    return 'Student';
 }
 
 export default function ProfileSettingsScreen() {
@@ -55,17 +62,9 @@ export default function ProfileSettingsScreen() {
     const indexNumber = user?.indexNumber || '';
     const programme = user?.programme || '';
     const level = user?.level || '';
-    const phone = user?.phone || '';
-    const bio = user?.bio || '';
     const role = user?.role || 'student';
     const referenceNumber = user?.referenceNumber || '';
-
-    // "Year Group" and "Class Group" are not part of AuthUser or the
-    // GET /profile/me response today (see ProfileResponse in this file and
-    // AuthUser in context/auth-context.tsx) — placeholders until the backend
-    // exposes them, rather than inventing values or a new API call.
-    const yearGroup = 'Not available yet';
-    const classGroup = 'Not available yet';
+    const classGroup = user?.classGroup || '';
 
     const [classReminders, setClassReminders] = useState(true);
     const [assignmentReminders, setAssignmentReminders] = useState(true);
@@ -90,6 +89,7 @@ export default function ProfileSettingsScreen() {
                 bio: profile.bio ?? undefined,
                 programme: profile.programme ?? undefined,
                 level: profile.level ?? undefined,
+                classGroup: profile.classGroup ?? undefined,
             });
         } catch {
             // Offline or request failed — keep showing cached context data.
@@ -207,14 +207,32 @@ export default function ProfileSettingsScreen() {
 
                     <View style={styles.heroSubRow}>
                         <View style={[styles.heroSubBox, { marginRight: 10 }]}>
-                            <Text style={styles.heroSubLabel}>Year Group</Text>
-                            <Text style={styles.heroSubValue}>{yearGroup}</Text>
+                            <Text style={styles.heroSubLabel}>Email</Text>
+                            <Text style={styles.heroSubValue} numberOfLines={1}>{email || 'Not available yet'}</Text>
                         </View>
                         <View style={styles.heroSubBox}>
+                            <Text style={styles.heroSubLabel}>Role</Text>
+                            <Text style={styles.heroSubValue}>{roleLabel(role)}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.heroSubRow}>
+                        <View style={[styles.heroSubBox, { marginRight: 10 }]}>
+                            <Text style={styles.heroSubLabel}>Student ID</Text>
+                            <Text style={styles.heroSubValue}>{indexNumber || 'Not available yet'}</Text>
+                        </View>
+                        <View style={styles.heroSubBox}>
+                            <Text style={styles.heroSubLabel}>Level</Text>
+                            <Text style={styles.heroSubValue}>{level || 'Not available yet'}</Text>
+                        </View>
+                    </View>
+
+                    {!!classGroup && (
+                        <View style={styles.heroSubBoxFull}>
                             <Text style={styles.heroSubLabel}>Class Group</Text>
                             <Text style={styles.heroSubValue}>{classGroup}</Text>
                         </View>
-                    </View>
+                    )}
                 </LinearGradient>
 
                 <View style={styles.heroActionsRow}>
@@ -227,49 +245,6 @@ export default function ProfileSettingsScreen() {
                         <Ionicons name="lock-closed-outline" size={16} color={AppColors.primary} />
                         <Text style={styles.heroOutlineButtonText}>Change Password</Text>
                     </TouchableOpacity>
-                </View>
-
-                <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>Academic Profile</Text>
-
-                    <View style={styles.profileRow}>
-                        <View style={styles.labelRow}>
-                            <Text style={styles.label}>Email</Text>
-                            <Ionicons name="lock-closed-outline" size={11} color={AppColors.mutedText} />
-                        </View>
-                        <Text style={styles.value}>{email || 'Not available yet'}</Text>
-                    </View>
-
-                    <View style={styles.profileRow}>
-                        <View style={styles.labelRow}>
-                            <Text style={styles.label}>Student Index Number</Text>
-                            <Ionicons name="lock-closed-outline" size={11} color={AppColors.mutedText} />
-                        </View>
-                        <Text style={styles.value}>{indexNumber || 'Not available yet'}</Text>
-                    </View>
-                    <Text style={styles.lockedNote}>
-                        Email and index number are tied to your account and can&apos;t be changed.
-                    </Text>
-
-                    <View style={styles.profileRow}>
-                        <Text style={styles.label}>Phone</Text>
-                        <Text style={styles.value}>{phone || 'Not set'}</Text>
-                    </View>
-
-                    <View style={styles.profileRow}>
-                        <Text style={styles.label}>Bio</Text>
-                        <Text style={styles.value}>{bio || 'Not set'}</Text>
-                    </View>
-
-                    <View style={styles.profileRow}>
-                        <Text style={styles.label}>Level</Text>
-                        <Text style={styles.value}>{level || 'Not available yet'}</Text>
-                    </View>
-
-                    <View style={styles.profileRow}>
-                        <Text style={styles.label}>Role</Text>
-                        <Text style={styles.roleBadge}>{role}</Text>
-                    </View>
                 </View>
 
                 <View style={styles.card}>
@@ -473,6 +448,7 @@ const styles = StyleSheet.create({
     },
     heroSubRow: {
         flexDirection: 'row',
+        marginBottom: 10,
     },
     heroSubBox: {
         flex: 1,
