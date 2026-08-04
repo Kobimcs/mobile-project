@@ -29,6 +29,11 @@ public class LabExamPdfParser {
 
     private static final Pattern TIME = Pattern.compile("(\\d{1,2}:\\d{2}\\s*[APap][Mm])");
 
+    // Matches the header's "DATE:" line, e.g. "DATE: FRIDAY, JULY 10,, 2026".
+    // '.' doesn't match line terminators by default, so this naturally stops
+    // at the end of that line without needing the text pre-collapsed.
+    private static final Pattern DATE_LINE = Pattern.compile("DATE:\\s*(.+)", Pattern.CASE_INSENSITIVE);
+
     // How far past a reference number we'll look for its "<venue> <time>".
     // Real venue strings are short ("MED SCH LAB", "PB- SIM LAB", "COS SF 26"),
     // so this comfortably covers them while staying short enough not to bleed
@@ -80,6 +85,34 @@ public class LabExamPdfParser {
         }
 
         return entries;
+    }
+
+    /**
+     * Pulls the exam date out of the PDF header's "DATE:" line, e.g.
+     * "DATE: FRIDAY, JULY 10,, 2026" -> "FRIDAY, JULY 10, 2026". Real PDFs
+     * have been seen with doubled commas/spacing, which this collapses; when
+     * nothing after "DATE:" is confidently cleanable it falls back to the raw
+     * captured text rather than dropping it. Returns "" when no "DATE:" line
+     * is present at all — never throws.
+     *
+     * @param rawText text extracted from the PDF (e.g. via PDFBox's PDFTextStripper)
+     */
+    public String extractExamDate(String rawText) {
+        if (rawText == null || rawText.isBlank()) return "";
+
+        Matcher matcher = DATE_LINE.matcher(rawText);
+        if (!matcher.find()) return "";
+
+        String captured = matcher.group(1).trim();
+        if (captured.isEmpty()) return "";
+
+        String cleaned = captured
+            .replaceAll("[,\\s]*,[,\\s]*", ", ") // collapse doubled commas/odd spacing around them
+            .replaceAll("\\s+", " ")
+            .trim()
+            .replaceAll("[,;\\s]+$", ""); // drop a trailing comma left by the collapse
+
+        return cleaned.isEmpty() ? captured : cleaned;
     }
 
     private static String cleanVenue(String venue) {

@@ -68,7 +68,7 @@ public class ExamVenueController {
                                             Authentication authentication) {
         User user = currentUser(authentication);
         ExamVenue venue = ExamVenue.builder()
-            .courseCode(request.courseCode())
+            .courseCode(normalizeCourseCode(request.courseCode()))
             .courseTitle(request.courseTitle())
             .examDate(request.examDate())
             .examTime(request.examTime())
@@ -101,7 +101,7 @@ public class ExamVenueController {
                 continue;
             }
             venues.add(ExamVenue.builder()
-                .courseCode(r.courseCode())
+                .courseCode(normalizeCourseCode(r.courseCode()))
                 .courseTitle(r.courseTitle())
                 .examDate(r.examDate())
                 .examTime(r.examTime())
@@ -152,29 +152,31 @@ public class ExamVenueController {
         }
 
         List<LabExamPdfParser.ParsedEntry> parsed = labExamPdfParser.parse(text);
+        // Not collected from the rep — the PDF's header carries a single exam
+        // date shared by every row (see LabExamPdfParser.extractExamDate);
+        // each row still carries its own exam time.
+        String examDate = labExamPdfParser.extractExamDate(text);
 
-        String trimmedCourseCode = courseCode.trim();
+        String normalizedCourseCode = normalizeCourseCode(courseCode);
         String trimmedCourseTitle = isBlank(courseTitle) ? "" : courseTitle.trim();
         List<LabExamEntry> toSave = new ArrayList<>();
         for (LabExamPdfParser.ParsedEntry p : parsed) {
             toSave.add(LabExamEntry.builder()
-                .courseCode(trimmedCourseCode)
+                .courseCode(normalizedCourseCode)
                 .courseTitle(trimmedCourseTitle)
-                // Not collected from the rep — the PDF only carries each
-                // student's own exam time (see LabExamPdfParser), never a date.
-                .examDate("")
+                .examDate(examDate)
                 .examTime(p.examTime())
                 .referenceNumber(p.referenceNumber())
                 .venue(p.venue())
                 .build());
         }
 
-        labExamEntryRepository.deleteByCourseCodeIgnoreCase(trimmedCourseCode);
+        labExamEntryRepository.deleteByCourseCodeIgnoreCase(normalizedCourseCode);
         labExamEntryRepository.saveAll(toSave);
 
-        auditService.log("LAB_EXAM_PDF_UPLOADED", trimmedCourseCode + " (" + toSave.size() + " entries)");
+        auditService.log("LAB_EXAM_PDF_UPLOADED", normalizedCourseCode + " (" + toSave.size() + " entries)");
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(new LabExamUploadResponse(trimmedCourseCode, parsed.size(), toSave.size()));
+            .body(new LabExamUploadResponse(normalizedCourseCode, parsed.size(), toSave.size()));
     }
 
     // Student search: query is EITHER a 7-digit index number or an 8-digit
@@ -187,6 +189,7 @@ public class ExamVenueController {
         if (isBlank(courseCode) || isBlank(query)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Course code and a search number are required.");
         }
+        String normalizedCourseCode = normalizeCourseCode(courseCode);
         String trimmedQuery = query.trim();
         if (!trimmedQuery.matches("\\d{7}|\\d{8}")) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
@@ -207,17 +210,19 @@ public class ExamVenueController {
         }
 
         Optional<LabExamEntry> labExamMatch =
-            labExamEntryRepository.findFirstByCourseCodeIgnoreCaseAndReferenceNumber(courseCode.trim(), referenceNumber);
+            labExamEntryRepository.findFirstByCourseCodeIgnoreCaseAndReferenceNumber(normalizedCourseCode, referenceNumber);
         if (labExamMatch.isPresent()) {
             return ResponseEntity.ok(LabExamLookupResponse.fromLabExam(labExamMatch.get()));
         }
 
         // Not on the PDF-derived list — fall back to the existing manual
         // range system (reusing its lookup query, not reimplementing it),
-        // scoped down to this course code.
+        // scoped down to this course code. Compares normalized on both sides
+        // so ranges saved before this normalization (mixed spacing/casing)
+        // still match a normalized query.
         Long numericQuery = Long.parseLong(trimmedQuery);
         Optional<ExamVenue> rangeMatch = examVenueRepository.findByIndexNumber(numericQuery).stream()
-            .filter(v -> v.getCourseCode().equalsIgnoreCase(courseCode.trim()))
+            .filter(v -> normalizeCourseCode(v.getCourseCode()).equals(normalizedCourseCode))
             .findFirst();
 
         return ResponseEntity.ok(rangeMatch.map(LabExamLookupResponse::fromRange)
@@ -226,6 +231,12 @@ public class ExamVenueController {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    // "CSM 252", "csm252" and "CSM252" must all resolve to the same course so
+    // upload and search never disagree over spacing/casing.
+    private static String normalizeCourseCode(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
     }
 
     private static String extensionOf(String filename) {
