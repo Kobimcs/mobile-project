@@ -8,6 +8,14 @@ export type PickedDocument = {
     name: string;
     mimeType?: string;
     size?: number;
+    // Web only: the real browser File/Blob for the picked document (see
+    // expo-document-picker's DocumentPickerAsset.file). On web, the plain
+    // { uri, name, type } descriptor below does NOT produce an actual
+    // multipart file part — the browser's native FormData silently
+    // stringifies a non-Blob value, so the backend sees no "file" part at
+    // all (MissingServletRequestPartException). When this is present we
+    // append it directly instead.
+    file?: Blob;
 };
 
 // Kept in sync with the backend's spring.servlet.multipart.max-file-size and
@@ -18,14 +26,16 @@ export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 /**
  * Upload a picked document to a backend path as multipart/form-data. Uses
  * XMLHttpRequest so we can report determinate upload progress on both native and
- * web. Resolves on success, rejects with a user-facing message otherwise.
+ * web. Resolves with the parsed JSON response (or undefined if the body is
+ * empty), rejects with a user-facing message otherwise.
  */
-function uploadToPath(
+function uploadToPath<T = void>(
     path: string,
     file: PickedDocument,
     token: string | null,
-    onProgress?: (fraction: number) => void
-): Promise<void> {
+    onProgress?: (fraction: number) => void,
+    extraFields?: Record<string, string>
+): Promise<T> {
     // Caught here (before a network round trip) so oversized files get an
     // immediate, specific message instead of waiting on the server to reject them.
     if (file.size != null && file.size > MAX_UPLOAD_BYTES) {
@@ -33,12 +43,24 @@ function uploadToPath(
     }
     return new Promise((resolve, reject) => {
         const form = new FormData();
-        // React Native's FormData accepts a { uri, name, type } file descriptor.
-        form.append('file', {
-            uri: file.uri,
-            name: file.name,
-            type: file.mimeType || 'application/octet-stream',
-        } as unknown as Blob);
+        if (file.file) {
+            // Web: a real Blob/File, so the browser attaches it as an actual
+            // multipart file part with the given filename.
+            form.append('file', file.file, file.name);
+        } else {
+            // Native: React Native's FormData polyfill accepts this
+            // { uri, name, type } descriptor and streams the file at that URI.
+            form.append('file', {
+                uri: file.uri,
+                name: file.name,
+                type: file.mimeType || 'application/octet-stream',
+            } as unknown as Blob);
+        }
+        if (extraFields) {
+            for (const [key, value] of Object.entries(extraFields)) {
+                form.append(key, value);
+            }
+        }
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${API_BASE_URL}${path}`);
@@ -54,7 +76,15 @@ function uploadToPath(
 
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                resolve();
+                if (!xhr.responseText) {
+                    resolve(undefined as T);
+                    return;
+                }
+                try {
+                    resolve(JSON.parse(xhr.responseText) as T);
+                } catch {
+                    resolve(undefined as T);
+                }
                 return;
             }
             let message = 'Upload failed. Please try again.';
@@ -155,6 +185,24 @@ export function uploadTimetableDocument(
 
 export function openTimetableDocument(documentId: number, fileName: string, token: string | null): Promise<void> {
     return openFromPath(`/timetable/document/${documentId}`, fileName, token);
+}
+
+// ── Lab exam schedule PDF (per-student placements, replaces CSV bulk upload) ─
+export type LabExamPdfUploadResult = {
+    courseCode: string;
+    entriesParsed: number;
+    entriesSaved: number;
+};
+
+export function uploadLabExamPdf(
+    file: PickedDocument,
+    fields: { courseCode: string; courseTitle?: string },
+    token: string | null,
+    onProgress?: (fraction: number) => void
+): Promise<LabExamPdfUploadResult> {
+    const formFields: Record<string, string> = { courseCode: fields.courseCode };
+    if (fields.courseTitle) formFields.courseTitle = fields.courseTitle;
+    return uploadToPath<LabExamPdfUploadResult>('/exam-venues/upload-pdf', file, token, onProgress, formFields);
 }
 
 /** Human-readable file size, e.g. "1.4 MB". */

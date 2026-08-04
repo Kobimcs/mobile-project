@@ -128,18 +128,15 @@ public class ExamVenueController {
     public ResponseEntity<LabExamUploadResponse> uploadPdf(
             @RequestParam("file") MultipartFile file,
             @RequestParam("courseCode") String courseCode,
-            @RequestParam("courseTitle") String courseTitle,
-            @RequestParam("examDate") String examDate,
-            @RequestParam("examTime") String examTime,
+            @RequestParam(value = "courseTitle", required = false) String courseTitle,
             Authentication authentication) {
         currentUser(authentication);
 
         if (file == null || file.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Please choose a lab exam schedule PDF to upload.");
         }
-        if (isBlank(courseCode) || isBlank(courseTitle) || isBlank(examDate) || isBlank(examTime)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                "Course code, course title, exam date and exam time are all required.");
+        if (isBlank(courseCode)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Course code is required.");
         }
         String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "lab-exam";
         if (!"pdf".equals(extensionOf(originalName))) {
@@ -157,12 +154,15 @@ public class ExamVenueController {
         List<LabExamPdfParser.ParsedEntry> parsed = labExamPdfParser.parse(text);
 
         String trimmedCourseCode = courseCode.trim();
+        String trimmedCourseTitle = isBlank(courseTitle) ? "" : courseTitle.trim();
         List<LabExamEntry> toSave = new ArrayList<>();
         for (LabExamPdfParser.ParsedEntry p : parsed) {
             toSave.add(LabExamEntry.builder()
                 .courseCode(trimmedCourseCode)
-                .courseTitle(courseTitle.trim())
-                .examDate(examDate.trim())
+                .courseTitle(trimmedCourseTitle)
+                // Not collected from the rep — the PDF only carries each
+                // student's own exam time (see LabExamPdfParser), never a date.
+                .examDate("")
                 .examTime(p.examTime())
                 .referenceNumber(p.referenceNumber())
                 .venue(p.venue())
