@@ -1,12 +1,11 @@
 import { NavigateButton } from '@/components/navigate-button';
-import { OfflineBanner } from '@/components/offline-banner';
 import { AppColors } from '@/constants/colors';
 import { Fonts, cardShadow } from '@/constants/ui';
 import { useAuth } from '@/context/auth-context';
-import { CacheKeys, fetchWithCache } from '@/services/cache';
+import { apiRequest } from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -19,18 +18,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type ExamVenueRecord = {
-    id: number;
-    courseCode: string;
-    courseTitle: string;
-    examDate: string;
-    examTime: string;
-    venue: string;
-    buildingOrBlock: string;
-    roomOrHall?: string;
-    startIndex: number;
-    endIndex: number;
-    status: string;
+type ExamVenueLookupResponse = {
+    found: boolean;
+    source: 'LAB_EXAM_PDF' | 'RANGE' | null;
+    courseCode: string | null;
+    courseTitle: string | null;
+    examDate: string | null;
+    examTime: string | null;
+    venue: string | null;
+    buildingOrBlock: string | null;
+    roomOrHall: string | null;
+    status: string | null;
 };
 
 function formatStatusLabel(status: string) {
@@ -40,61 +38,53 @@ function formatStatusLabel(status: string) {
 
 export default function ExamVenueSearchScreen() {
     const { token } = useAuth();
-    const [allVenues, setAllVenues] = useState<ExamVenueRecord[]>([]);
-    const [venuesReady, setVenuesReady] = useState(false);
-    const [isOffline, setIsOffline] = useState(false);
-    const [loadFailed, setLoadFailed] = useState(false);
 
+    const [courseCode, setCourseCode] = useState('');
     const [searchNumber, setSearchNumber] = useState('');
-    const [matchedVenues, setMatchedVenues] = useState<ExamVenueRecord[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [result, setResult] = useState<ExamVenueLookupResponse | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
 
-    // Download all exam venues once (network-first, cache fallback). Search then
-    // runs locally against this list, so it works with no connection afterwards.
-    const loadVenues = useCallback(async () => {
-        try {
-            const { data, fromCache } = await fetchWithCache<ExamVenueRecord[]>(
-                CacheKeys.examVenues, '/exam-venues', token
-            );
-            setAllVenues(data);
-            setIsOffline(fromCache);
-            setLoadFailed(false);
-        } catch {
-            setLoadFailed(true);
-        } finally {
-            setVenuesReady(true);
-        }
-    }, [token]);
-
-    useEffect(() => {
-        loadVenues();
-    }, [loadVenues]);
-
-    function handleSearchVenue() {
+    async function handleSearchVenue() {
+        const cleanedCourseCode = courseCode.trim();
         const cleanedNumber = searchNumber.trim();
 
+        if (!cleanedCourseCode) {
+            Alert.alert('Missing course code', 'Please enter the course code.');
+            return;
+        }
         if (!cleanedNumber) {
-            Alert.alert('Missing number', 'Please enter your index number.');
+            Alert.alert('Missing number', 'Please enter your index or reference number.');
             return;
         }
-        if (Number.isNaN(Number(cleanedNumber))) {
-            Alert.alert('Invalid number', 'Please enter numbers only. Example: 6170524');
-            return;
-        }
-        if (!venuesReady) {
-            Alert.alert('Please wait', 'Exam data is still loading.');
+        if (!/^\d+$/.test(cleanedNumber)) {
+            Alert.alert('Invalid number', 'Please enter numbers only. Example: 6170524 or 21475407.');
             return;
         }
 
-        const num = Number(cleanedNumber);
-        const found = allVenues.filter((v) => num >= v.startIndex && num <= v.endIndex);
-        setMatchedVenues(found);
-        setHasSearched(true);
+        try {
+            setIsSearching(true);
+            setSearchError(null);
+            setResult(null);
+            const response = await apiRequest<ExamVenueLookupResponse>(
+                `/exam-venues/lookup?courseCode=${encodeURIComponent(cleanedCourseCode)}&query=${encodeURIComponent(cleanedNumber)}`,
+                { token }
+            );
+            setResult(response);
+        } catch (e) {
+            setSearchError(e instanceof Error ? e.message : 'Could not search right now. Please try again.');
+        } finally {
+            setIsSearching(false);
+            setHasSearched(true);
+        }
     }
 
     function handleClearSearch() {
+        setCourseCode('');
         setSearchNumber('');
-        setMatchedVenues([]);
+        setResult(null);
+        setSearchError(null);
         setHasSearched(false);
     }
 
@@ -111,12 +101,19 @@ export default function ExamVenueSearchScreen() {
 
                 <Text style={styles.title}>Exam Venue Search</Text>
                 <Text style={styles.subtitle}>
-                    Enter your index number to find your exam venue. Works offline once downloaded.
+                    Enter the course code and your index or reference number to find your exam venue.
                 </Text>
 
-                {isOffline && <OfflineBanner />}
-
                 <View style={styles.searchCard}>
+                    <Text style={styles.label}>Course Code</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholderTextColor={AppColors.mutedText}
+                        value={courseCode}
+                        onChangeText={setCourseCode}
+                        autoCapitalize="characters"
+                    />
+
                     <Text style={styles.label}>Index / Reference Number</Text>
                     <TextInput
                         style={styles.input}
@@ -127,11 +124,11 @@ export default function ExamVenueSearchScreen() {
                     />
 
                     <TouchableOpacity
-                        style={[styles.searchButton, !venuesReady && styles.disabledButton]}
+                        style={[styles.searchButton, isSearching && styles.disabledButton]}
                         onPress={handleSearchVenue}
-                        disabled={!venuesReady}
+                        disabled={isSearching}
                     >
-                        {!venuesReady ? (
+                        {isSearching ? (
                             <ActivityIndicator color={AppColors.card} />
                         ) : (
                             <Text style={styles.searchButtonText}>Search Venue</Text>
@@ -145,108 +142,83 @@ export default function ExamVenueSearchScreen() {
                     )}
                 </View>
 
-                {loadFailed && allVenues.length === 0 ? (
-                    <View style={styles.emptyCard}>
-                        <Text style={styles.emptyTitle}>Exam data not downloaded</Text>
-                        <Text style={styles.emptyText}>
-                            Connect to the internet once to download exam venues. After that you can search offline.
-                        </Text>
-                    </View>
-                ) : !hasSearched ? (
+                {!hasSearched && !isSearching && (
                     <View style={styles.emptyCard}>
                         <Text style={styles.emptyTitle}>Search for your exam venue</Text>
                         <Text style={styles.emptyText}>
-                            Enter your index number to see your venue. Works offline once data is downloaded.
+                            Enter the course code and your index or reference number to see your venue.
                         </Text>
-                    </View>
-                ) : null}
-
-                {hasSearched && matchedVenues.length > 0 && (
-                    <View style={styles.resultsSection}>
-                        <Text style={styles.sectionTitle}>
-                            {matchedVenues.length} matching venue
-                            {matchedVenues.length === 1 ? '' : 's'} found
-                        </Text>
-
-                        {matchedVenues.map((venueRecord) => (
-                            <View key={venueRecord.id} style={styles.resultCard}>
-                                <View style={styles.resultHeader}>
-                                    <Text style={styles.courseCode}>
-                                        {venueRecord.courseCode}
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            styles.statusBadge,
-                                            venueRecord.status === 'confirmed' &&
-                                            styles.confirmedBadge,
-                                        ]}
-                                    >
-                                        {formatStatusLabel(venueRecord.status)}
-                                    </Text>
-                                </View>
-
-                                <Text style={styles.courseTitle}>
-                                    {venueRecord.courseTitle}
-                                </Text>
-
-                                <View style={styles.infoBox}>
-                                    <Text style={styles.infoLabel}>Exam Date</Text>
-                                    <Text style={styles.infoValue}>
-                                        {venueRecord.examDate}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.infoBox}>
-                                    <Text style={styles.infoLabel}>Exam Time</Text>
-                                    <Text style={styles.infoValue}>
-                                        {venueRecord.examTime}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.infoBox}>
-                                    <Text style={styles.infoLabel}>Venue</Text>
-                                    <Text style={styles.infoValue}>
-                                        {venueRecord.venue}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.infoBox}>
-                                    <Text style={styles.infoLabel}>Building / Block</Text>
-                                    <Text style={styles.infoValue}>
-                                        {venueRecord.buildingOrBlock}
-                                    </Text>
-                                </View>
-
-                                {venueRecord.roomOrHall && (
-                                    <View style={styles.infoBox}>
-                                        <Text style={styles.infoLabel}>Room / Hall</Text>
-                                        <Text style={styles.infoValue}>
-                                            {venueRecord.roomOrHall}
-                                        </Text>
-                                    </View>
-                                )}
-
-                                <View style={styles.rangeBox}>
-                                    <Text style={styles.rangeLabel}>Index Range</Text>
-                                    <Text style={styles.rangeValue}>
-                                        {venueRecord.startIndex} - {venueRecord.endIndex}
-                                    </Text>
-                                </View>
-
-                                <NavigateButton
-                                    query={`${venueRecord.venue} ${venueRecord.buildingOrBlock}`}
-                                />
-                            </View>
-                        ))}
                     </View>
                 )}
 
-                {hasSearched && matchedVenues.length === 0 && allVenues.length > 0 && (
+                {searchError && (
                     <View style={styles.emptyCard}>
-                        <Text style={styles.emptyTitle}>No venue found</Text>
+                        <Text style={styles.emptyTitle}>Search failed</Text>
+                        <Text style={styles.emptyText}>{searchError}</Text>
+                    </View>
+                )}
+
+                {hasSearched && !searchError && result?.found && (
+                    <View style={styles.resultCard}>
+                        <View style={styles.resultHeader}>
+                            <Text style={styles.courseCode}>{result.courseCode}</Text>
+                            {result.status && (
+                                <Text
+                                    style={[
+                                        styles.statusBadge,
+                                        result.status === 'confirmed' && styles.confirmedBadge,
+                                    ]}
+                                >
+                                    {formatStatusLabel(result.status)}
+                                </Text>
+                            )}
+                        </View>
+
+                        <Text style={styles.courseTitle}>{result.courseTitle}</Text>
+
+                        {result.examDate && (
+                            <View style={styles.infoBox}>
+                                <Text style={styles.infoLabel}>Exam Date</Text>
+                                <Text style={styles.infoValue}>{result.examDate}</Text>
+                            </View>
+                        )}
+
+                        <View style={styles.infoBox}>
+                            <Text style={styles.infoLabel}>Exam Time</Text>
+                            <Text style={styles.infoValue}>{result.examTime}</Text>
+                        </View>
+
+                        <View style={styles.infoBox}>
+                            <Text style={styles.infoLabel}>Venue</Text>
+                            <Text style={styles.infoValue}>{result.venue}</Text>
+                        </View>
+
+                        {result.buildingOrBlock && (
+                            <View style={styles.infoBox}>
+                                <Text style={styles.infoLabel}>Building / Block</Text>
+                                <Text style={styles.infoValue}>{result.buildingOrBlock}</Text>
+                            </View>
+                        )}
+
+                        {result.roomOrHall && (
+                            <View style={styles.infoBox}>
+                                <Text style={styles.infoLabel}>Room / Hall</Text>
+                                <Text style={styles.infoValue}>{result.roomOrHall}</Text>
+                            </View>
+                        )}
+
+                        <NavigateButton
+                            query={`${result.venue ?? ''} ${result.buildingOrBlock ?? ''}`.trim()}
+                        />
+                    </View>
+                )}
+
+                {hasSearched && !searchError && result && !result.found && (
+                    <View style={styles.emptyCard}>
+                        <Text style={styles.emptyTitle}>You&apos;re not on this list</Text>
                         <Text style={styles.emptyText}>
-                            No exam venue range matches this index or reference number yet.
-                            Please check again later.
+                            You&apos;re not on this list for that course. If you&apos;re sure of the
+                            course, check with your course rep, or report to the default centre.
                         </Text>
                     </View>
                 )}
@@ -341,15 +313,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontFamily: Fonts.bodyMedium,
     },
-    resultsSection: {
-        marginBottom: 18,
-    },
-    sectionTitle: {
-        fontSize: 17,
-        fontFamily: Fonts.headingSemi,
-        color: AppColors.text,
-        marginBottom: 10,
-    },
     resultCard: {
         backgroundColor: AppColors.card,
         borderRadius: 18,
@@ -409,23 +372,6 @@ const styles = StyleSheet.create({
         color: AppColors.text,
         fontFamily: Fonts.bodyBold,
         lineHeight: 20,
-    },
-    rangeBox: {
-        backgroundColor: AppColors.primary,
-        borderRadius: 12,
-        padding: 12,
-        marginTop: 2,
-    },
-    rangeLabel: {
-        fontSize: 12,
-        color: AppColors.accent,
-        fontFamily: Fonts.bodyBold,
-        marginBottom: 4,
-    },
-    rangeValue: {
-        fontSize: 15,
-        color: AppColors.card,
-        fontFamily: Fonts.bodyBold,
     },
     emptyCard: {
         backgroundColor: AppColors.card,

@@ -2,10 +2,9 @@ import { AppColors } from '@/constants/colors';
 import { Fonts, cardShadow } from '@/constants/ui';
 import { useAuth } from '@/context/auth-context';
 import { apiRequest } from '@/services/api';
-import { parseCsv } from '@/services/csv';
+import { type PickedDocument, uploadLabExamPdf } from '@/services/documents';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { File as FsFile } from 'expo-file-system';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -37,56 +36,69 @@ export default function ManageExamVenuesScreen() {
     const [endNumber, setEndNumber] = useState('');
     const [status, setStatus] = useState<ExamVenueStatus>('confirmed');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
 
-    const handleUploadCsv = async () => {
+    const [pdfCourseCode, setPdfCourseCode] = useState('');
+    const [pdfCourseTitle, setPdfCourseTitle] = useState('');
+    const [pdfFile, setPdfFile] = useState<PickedDocument | null>(null);
+    const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+    const [pdfUploadResult, setPdfUploadResult] = useState<{ courseCode: string; entriesSaved: number } | null>(null);
+
+    const handlePickPdf = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', 'text/plain'],
+                type: 'application/pdf',
                 copyToCacheDirectory: true,
             });
             if (result.canceled) return;
 
-            const uri = result.assets[0].uri;
-            const text = Platform.OS === 'web'
-                ? await (await fetch(uri)).text()
-                : await new FsFile(uri).text();
-
-            const rows = parseCsv(text);
-            if (rows.length === 0) {
-                Alert.alert('Empty or invalid file', 'The CSV needs a header row and at least one row of data.');
-                return;
-            }
-
-            const venues = rows.map((r) => ({
-                courseCode: r.courseCode ?? r.coursecode ?? '',
-                courseTitle: r.courseTitle ?? r.coursetitle ?? '',
-                examDate: r.examDate ?? r.examdate ?? '',
-                examTime: r.examTime ?? r.examtime ?? '',
-                venue: r.venue ?? '',
-                buildingOrBlock: r.buildingOrBlock ?? r.building ?? '',
-                roomOrHall: r.roomOrHall ?? r.room ?? '',
-                startIndex: Number(r.startIndex ?? r.startindex ?? r.start),
-                endIndex: Number(r.endIndex ?? r.endindex ?? r.end),
-                status: r.status || 'confirmed',
-            }));
-
-            setIsUploading(true);
-            const res = await apiRequest<{ received: number; added: number }>('/exam-venues/bulk', {
-                method: 'POST',
-                token,
-                body: venues,
+            const asset = result.assets[0];
+            setPdfFile({
+                uri: asset.uri,
+                name: asset.name,
+                mimeType: asset.mimeType,
+                size: asset.size ?? undefined,
+                // Only present on web — see the PickedDocument.file doc comment
+                // in services/documents.ts for why this matters.
+                file: (asset as { file?: Blob }).file,
             });
-            Alert.alert(
-                'Upload complete',
-                `${res.added} of ${res.received} rows added.` +
-                    (res.added < res.received ? ' Rows with missing or invalid fields were skipped.' : ''),
-                [{ text: 'Done', onPress: () => router.back() }]
-            );
+            setPdfUploadResult(null);
         } catch (e) {
-            Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not read or upload the file.');
+            Alert.alert('Could not select file', e instanceof Error ? e.message : 'Please try again.');
+        }
+    };
+
+    const handleUploadPdf = async () => {
+        const cleanedCourseCode = pdfCourseCode.trim();
+        const cleanedCourseTitle = pdfCourseTitle.trim();
+
+        if (!cleanedCourseCode) {
+            Alert.alert('Missing details', 'Please enter the course code.');
+            return;
+        }
+        if (!pdfFile) {
+            Alert.alert('No file selected', 'Please choose the lab exam schedule PDF to upload.');
+            return;
+        }
+
+        try {
+            setIsUploadingPdf(true);
+            setPdfUploadResult(null);
+            const result = await uploadLabExamPdf(
+                pdfFile,
+                { courseCode: cleanedCourseCode, courseTitle: cleanedCourseTitle || undefined },
+                token
+            );
+
+            setPdfUploadResult({ courseCode: result.courseCode, entriesSaved: result.entriesSaved });
+            Alert.alert('Upload complete', `Parsed and saved ${result.entriesSaved} entries for ${result.courseCode}.`);
+
+            setPdfCourseCode('');
+            setPdfCourseTitle('');
+            setPdfFile(null);
+        } catch (e) {
+            Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload the PDF. Please try again.');
         } finally {
-            setIsUploading(false);
+            setIsUploadingPdf(false);
         }
     };
 
@@ -195,21 +207,61 @@ export default function ManageExamVenuesScreen() {
                     </Text>
 
                     <View style={styles.uploadCard}>
-                        <Text style={styles.sectionTitle}>Bulk upload (CSV)</Text>
-                        <Text style={styles.codeText}>
-                            courseCode, courseTitle, examDate, examTime, venue, buildingOrBlock, roomOrHall, startIndex, endIndex, status
+                        <Text style={styles.sectionTitle}>Lab Exam Schedule (PDF)</Text>
+                        <Text style={styles.helperText}>
+                            Upload the lecturer&apos;s PDF listing students individually with their venue.
+                            Re-uploading for the same course code replaces the previous list.
                         </Text>
+
+                        <Text style={styles.label}>Course Code</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholderTextColor={AppColors.mutedText}
+                            value={pdfCourseCode}
+                            onChangeText={setPdfCourseCode}
+                            autoCapitalize="characters"
+                        />
+
+                        <Text style={styles.label}>Course Title (optional)</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholderTextColor={AppColors.mutedText}
+                            value={pdfCourseTitle}
+                            onChangeText={setPdfCourseTitle}
+                        />
+
+                        <TouchableOpacity style={styles.fileButton} onPress={handlePickPdf}>
+                            <Text style={styles.fileButtonText}>
+                                {pdfFile ? 'Change PDF file' : 'Choose PDF file'}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {pdfFile && (
+                            <View style={styles.filePreview}>
+                                <Text style={styles.filePreviewLabel}>Selected file</Text>
+                                <Text style={styles.filePreviewText}>{pdfFile.name}</Text>
+                            </View>
+                        )}
+
                         <TouchableOpacity
-                            style={[styles.uploadButton, isUploading && styles.disabledButton]}
-                            onPress={handleUploadCsv}
-                            disabled={isUploading}
+                            style={[styles.uploadButton, isUploadingPdf && styles.disabledButton]}
+                            onPress={handleUploadPdf}
+                            disabled={isUploadingPdf}
                         >
-                            {isUploading ? (
+                            {isUploadingPdf ? (
                                 <ActivityIndicator color={AppColors.card} />
                             ) : (
-                                <Text style={styles.uploadButtonText}>Choose CSV file</Text>
+                                <Text style={styles.uploadButtonText}>Upload PDF</Text>
                             )}
                         </TouchableOpacity>
+
+                        {pdfUploadResult && (
+                            <View style={styles.successBanner}>
+                                <Text style={styles.successBannerText}>
+                                    Parsed and saved {pdfUploadResult.entriesSaved} entries for {pdfUploadResult.courseCode}.
+                                </Text>
+                            </View>
+                        )}
                     </View>
 
                     <View style={styles.formCard}>
@@ -529,6 +581,18 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: AppColors.text,
         fontWeight: '700',
+    },
+    successBanner: {
+        backgroundColor: AppColors.success,
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 14,
+    },
+    successBannerText: {
+        color: AppColors.card,
+        fontSize: 14,
+        fontFamily: Fonts.bodyBold,
+        lineHeight: 20,
     },
     saveButton: {
         height: 52,
