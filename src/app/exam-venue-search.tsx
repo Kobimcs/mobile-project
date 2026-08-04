@@ -162,7 +162,7 @@ export default function ExamVenueSearchScreen() {
                     <View style={styles.resultCard}>
                         <View style={styles.resultHeader}>
                             <Text style={styles.courseCode}>{result.courseCode}</Text>
-                            {result.status && (
+                            {result.status ? (
                                 <Text
                                     style={[
                                         styles.statusBadge,
@@ -171,17 +171,17 @@ export default function ExamVenueSearchScreen() {
                                 >
                                     {formatStatusLabel(result.status)}
                                 </Text>
-                            )}
+                            ) : null}
                         </View>
 
                         <Text style={styles.courseTitle}>{result.courseTitle}</Text>
 
-                        {result.examDate && (
+                        {result.examDate ? (
                             <View style={styles.infoBox}>
                                 <Text style={styles.infoLabel}>Exam Date</Text>
                                 <Text style={styles.infoValue}>{result.examDate}</Text>
                             </View>
-                        )}
+                        ) : null}
 
                         <View style={styles.infoBox}>
                             <Text style={styles.infoLabel}>Exam Time</Text>
@@ -193,19 +193,19 @@ export default function ExamVenueSearchScreen() {
                             <Text style={styles.infoValue}>{result.venue}</Text>
                         </View>
 
-                        {result.buildingOrBlock && (
+                        {result.buildingOrBlock ? (
                             <View style={styles.infoBox}>
                                 <Text style={styles.infoLabel}>Building / Block</Text>
                                 <Text style={styles.infoValue}>{result.buildingOrBlock}</Text>
                             </View>
-                        )}
+                        ) : null}
 
-                        {result.roomOrHall && (
+                        {result.roomOrHall ? (
                             <View style={styles.infoBox}>
                                 <Text style={styles.infoLabel}>Room / Hall</Text>
                                 <Text style={styles.infoValue}>{result.roomOrHall}</Text>
                             </View>
-                        )}
+                        ) : null}
 
                         <NavigateButton
                             query={`${result.venue ?? ''} ${result.buildingOrBlock ?? ''}`.trim()}
